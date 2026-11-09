@@ -388,7 +388,7 @@ const DynamicField = ({ field, register, errors, watch, setValue }) => {
 
 // Shared "create a listing" form for sellers and companies. The page
 // wrappers (pages/seller|company/CreateAuction.jsx) pass their own layout.
-const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserType }) => {
+const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserType, isAdmin = false }) => {
     const [step, setStep] = useState(1);
     const topRef = useRef(null);
 
@@ -688,6 +688,10 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                 fieldsToValidate.push('startPrice', 'bidIncrement', 'auctionDateId');
             }
 
+            if (auctionType === 'giveaway') {
+                fieldsToValidate.push('startDate', 'endDate');
+            }
+
             if (auctionType === 'reserve') {
                 fieldsToValidate.push('reservePrice');
             }
@@ -884,7 +888,12 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             );
 
             if (data && data.success) {
-                toast.success("Thanks! We'll check your listing within 12 hours and email you when it's live.", { duration: 8000 });
+                toast.success(
+                    isAdmin
+                        ? 'Listing created. Approve it in Auctions to set its closing time.'
+                        : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
+                    { duration: 8000 }
+                );
 
                 gtag('event', 'listing_submit', {
                     listing_id: data.data?._id,
@@ -943,7 +952,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                     <Container>
                         <div className="pt-16 md:py-7">
                             <h1 ref={topRef} className="text-3xl md:text-4xl font-bold mb-5 scroll-mt-24">Create a listing</h1>
-                            {step === 1 && <HowSellingWorks />}
+                            {step === 1 && !isAdmin && <HowSellingWorks />}
 
                             {/* Progress Steps */}
                             <div className="mb-8">
@@ -1250,8 +1259,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                 {[
                                                     { value: 'reserve', label: 'Reserve', text: "Your lowest price, hidden from buyers. If bids don't reach it, it doesn't sell, and the top 2 bidders can make you an offer. Minimum €500." },
                                                     { value: 'standard', label: 'No reserve', text: 'Sells to the highest bidder. Brings more bidders. Minimum starting bid €400.' },
-                                                    // { value: 'buy_now', label: 'Buy Now Auction' },
-                                                    // { value: 'giveaway', label: 'Free Giveaway' },
+                                                    ...(isAdmin ? [{ value: 'giveaway', label: 'Giveaway (admin)', text: 'Free item. The first person to claim it gets it.' }] : []),
                                                 ].map((type) => (
                                                     <label key={type.value} className={`flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${auctionType === type.value ? 'border-[#D19F3E] bg-[#D19F3E]/[0.06] ring-1 ring-[#D19F3E]' : 'border-gray-300'}`}>
                                                         <input
@@ -1271,7 +1279,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                         </div>
 
                                         {/* Show immediate start message for buy_now and giveaway */}
-                                        {(watch('auctionType') === 'buy_now' || watch('auctionType') === 'giveaway') && (
+                                        {watch('auctionType') === 'buy_now' && (
                                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                                                 <p className="text-green-700 flex items-center gap-2">
                                                     <Zap size={18} />
@@ -1552,6 +1560,31 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                 <p className="text-sm text-green-500">
                                                     No pricing needed. The auction will end as soon as someone claims it.
                                                 </p>
+                                                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label htmlFor="startDate" className="block text-sm font-medium text-secondary mb-1">Start date &amp; time *</label>
+                                                        <input
+                                                            {...register('startDate', { required: auctionType === 'giveaway' ? 'Start date is required' : false })}
+                                                            id="startDate"
+                                                            type="datetime-local"
+                                                            className="w-full p-3 border border-gray-300 rounded-lg"
+                                                        />
+                                                        {errors.startDate && <p className="text-red-500 text-sm mt-1">{errors.startDate.message}</p>}
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="endDate" className="block text-sm font-medium text-secondary mb-1">End date &amp; time *</label>
+                                                        <input
+                                                            {...register('endDate', {
+                                                                required: auctionType === 'giveaway' ? 'End date is required' : false,
+                                                                validate: (v) => auctionType !== 'giveaway' || !v || new Date(v) > new Date(watch('startDate')) || 'End must be after start',
+                                                            })}
+                                                            id="endDate"
+                                                            type="datetime-local"
+                                                            className="w-full p-3 border border-gray-300 rounded-lg"
+                                                        />
+                                                        {errors.endDate && <p className="text-red-500 text-sm mt-1">{errors.endDate.message}</p>}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -1577,7 +1610,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     ['Location', watch('location')],
                                                     ['Photos', `${uploadedPhotos.length}`],
                                                     ['Sale date', selectedAuctionDate ? fmtDate(selectedAuctionDate.endDate) : '-'],
-                                                    ['Sale type', auctionType === 'reserve' ? 'Reserve' : 'No reserve'],
+                                                    ['Sale type', auctionType === 'reserve' ? 'Reserve' : auctionType === 'giveaway' ? 'Giveaway' : 'No reserve'],
                                                     ['Starting bid', watch('startPrice') ? `${currencySymbol}${Number(watch('startPrice')).toLocaleString('en-IE')}` : '-'],
                                                     ...(auctionType === 'reserve' ? [['Reserve', watch('reservePrice') ? `${currencySymbol}${Number(watch('reservePrice')).toLocaleString('en-IE')}` : '-']] : []),
                                                     ['Bid increment', watch('bidIncrement') ? `${currencySymbol}${Number(watch('bidIncrement')).toLocaleString('en-IE')}` : '-'],
@@ -1703,7 +1736,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                             disabled={isLoading}
                                             className="flex items-center px-6 py-2 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 text-white hover:from-orange-500 hover:via-orange-600 hover:to-orange-700 rounded-lg transition-colors disabled:opacity-60"
                                         >
-                                            {isLoading ? 'Submitting...' : 'Submit for review'}
+                                            {isLoading ? 'Submitting...' : isAdmin ? 'Create listing' : 'Submit for review'}
                                             <ArrowRight size={18} className="ml-2" />
                                         </button>
                                     )}
