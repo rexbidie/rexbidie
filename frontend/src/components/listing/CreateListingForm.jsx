@@ -42,6 +42,7 @@ import { TouchBackend } from 'react-dnd-touch-backend';
 import { validateMinStart, validateMinReserve, minimumsHint, suggestedIncrement } from '../../utils/listingRules';
 import { FEATURED_FEE_EUR, SELLER_FEES_FREE_UNTIL } from '../../utils/fees';
 import { HowSellingWorks, Hint, Note } from './ListingGuidance';
+import { useScrollTopOnStep } from '../../hooks/useScrollTopOnStep';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -391,17 +392,8 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
     const [step, setStep] = useState(1);
     const topRef = useRef(null);
 
-    // After each step change, jump to the top of the form (instant, so the
-    // page doesn't end up part-way down or in the footer).
-    const firstRender = useRef(true);
-    useEffect(() => {
-        if (firstRender.current) {
-            firstRender.current = false;
-            return;
-        }
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-        topRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
-    }, [step]);
+    // After each step change, jump to the top of the form.
+    useScrollTopOnStep(step, topRef);
 
     // When a step has errors, show the first one.
     const showFirstError = () => {

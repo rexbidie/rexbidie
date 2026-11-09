@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useScrollTopOnStep } from '../../hooks/useScrollTopOnStep';
 import { useForm } from 'react-hook-form';
 import parse from 'html-react-parser';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -472,6 +473,7 @@ const DynamicField = ({ field, register, errors, watch, setValue }) => {
 
 const EditAuction = () => {
     const [step, setStep] = useState(1);
+    useScrollTopOnStep(step);
     const [allPhotos, setAllPhotos] = useState([]); // Unified photo array
     const [uploadedDocuments, setUploadedDocuments] = useState([]);
     const [existingDocuments, setExistingDocuments] = useState([]);
