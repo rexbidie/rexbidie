@@ -499,22 +499,21 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
 
     // Meta advert: only offered when the sale closes far enough away
     // for the ad to be approved and run.
-    const metaBoostRequested = watch('metaBoostRequested');
-    const metaBoostPackage = watch('metaBoostPackage');
+    const metaBoostPackage = watch('metaBoostPackage') || '';
     const metaBoostAvailable =
         !selectedAuctionDate ||
         new Date(selectedAuctionDate.endDate).getTime() - Date.now() >=
             META_BOOST_MIN_HOURS_BEFORE_CLOSE * 60 * 60 * 1000;
     const selectedMetaPackage =
-        metaBoostRequested && metaBoostAvailable
+        metaBoostAvailable
             ? META_BOOST_PACKAGES.find((pkg) => pkg.id === metaBoostPackage)
             : null;
 
     useEffect(() => {
-        if (!metaBoostAvailable && metaBoostRequested) {
-            setValue('metaBoostRequested', false);
+        if (!metaBoostAvailable && metaBoostPackage) {
+            setValue('metaBoostPackage', '');
         }
-    }, [metaBoostAvailable, metaBoostRequested, setValue]);
+    }, [metaBoostAvailable, metaBoostPackage, setValue]);
 
     useEffect(() => {
         if (auctionType !== 'standard' && auctionType !== 'reserve') {
@@ -712,7 +711,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             const fieldsToValidate = ['auctionType'];
 
             if (auctionType === 'standard' || auctionType === 'reserve') {
-                fieldsToValidate.push('startPrice', 'bidIncrement', 'auctionDateId', 'metaBoostPackage');
+                fieldsToValidate.push('startPrice', 'bidIncrement', 'auctionDateId');
             }
 
             if (auctionType === 'reserve') {
@@ -1563,39 +1562,32 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     </label>
                                                     {metaBoostAvailable ? (
                                                         <div className="rounded-lg border border-[#D19F3E]/50 bg-white p-3">
-                                                            <label htmlFor="metaBoostRequested" className="flex items-start gap-2 cursor-pointer">
-                                                                <input type="checkbox" id="metaBoostRequested" {...register('metaBoostRequested')} className="mt-1" />
-                                                                <span>
-                                                                    <span className="font-semibold text-gray-900">Advertise on Facebook &amp; Instagram: from €{META_BOOST_PACKAGES[0].priceEur}</span>
-                                                                    <span className="block text-gray-600">We run a paid ad for your listing until the sale closes.</span>
-                                                                </span>
-                                                            </label>
-                                                            {metaBoostRequested && (
-                                                                <div className="mt-3 space-y-2 pl-6">
-                                                                    {META_BOOST_PACKAGES.map((pkg) => (
-                                                                        <label key={pkg.id} className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer ${metaBoostPackage === pkg.id ? 'border-[#D19F3E] bg-[#D19F3E]/[0.06]' : 'border-gray-200'}`}>
+                                                            <p className="font-semibold text-gray-900">Advertise on Facebook &amp; Instagram</p>
+                                                            <p className="text-gray-600">We run a paid ad for your listing until the sale closes. Pick a package:</p>
+                                                            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                                                {[{ id: '', name: 'No advert', priceEur: null, reach: null }, ...META_BOOST_PACKAGES].map((pkg) => (
+                                                                    <label
+                                                                        key={pkg.id || 'none'}
+                                                                        className={`flex cursor-pointer flex-col rounded-lg border p-2.5 ${metaBoostPackage === pkg.id ? 'border-[#D19F3E] bg-[#D19F3E]/[0.06] ring-1 ring-[#D19F3E]' : 'border-gray-200 hover:bg-gray-50'}`}
+                                                                    >
+                                                                        <span className="flex items-center gap-2">
                                                                             <input
                                                                                 type="radio"
                                                                                 value={pkg.id}
-                                                                                {...register('metaBoostPackage', {
-                                                                                    validate: (v) => !getValues('metaBoostRequested') || !!v || 'Choose an advert package',
-                                                                                })}
-                                                                                className="mt-1"
+                                                                                checked={metaBoostPackage === pkg.id}
+                                                                                onChange={() => setValue('metaBoostPackage', pkg.id, { shouldDirty: true })}
                                                                             />
-                                                                            <span>
-                                                                                <span className="font-medium text-gray-900">{pkg.name}: €{pkg.priceEur}</span>
-                                                                                <span className="block text-gray-600">Estimated reach {pkg.reach} people</span>
-                                                                            </span>
-                                                                        </label>
-                                                                    ))}
-                                                                    {errors.metaBoostPackage && (
-                                                                        <p className="text-red-500 text-sm">{errors.metaBoostPackage.message}</p>
-                                                                    )}
-                                                                    <p className="text-xs text-gray-500">
-                                                                        Prices include VAT. Reach is an estimate, not a guarantee. Paid by card at checkout.
-                                                                    </p>
-                                                                </div>
-                                                            )}
+                                                                            <span className="font-medium text-gray-900">{pkg.priceEur ? `€${pkg.priceEur}` : pkg.name}</span>
+                                                                        </span>
+                                                                        <span className="mt-1 text-xs text-gray-600">
+                                                                            {pkg.reach ? <>{pkg.name}<br />Reach {pkg.reach}</> : 'Standard listing only'}
+                                                                        </span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                            <p className="mt-2 text-xs text-gray-500">
+                                                                Prices include VAT. Reach is an estimated number of people, not a guarantee. Paid by card at checkout.
+                                                            </p>
                                                         </div>
                                                     ) : (
                                                         <p className="rounded-lg border border-gray-200 bg-white p-3 text-gray-600">
