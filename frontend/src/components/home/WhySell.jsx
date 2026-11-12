@@ -32,9 +32,9 @@ function WhySell() {
         <section className="bg-white py-9 md:py-16">
             <Container>
                 <SectionHeading eyebrow="For sellers" title="Why Sell on RexBid" />
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
                     {TILES.map(({ icon, title, text }) => (
-                        <div key={title} className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
+                        <div key={title} className="w-[82%] shrink-0 snap-start rounded-2xl border border-gray-200 bg-white p-5 sm:w-auto md:p-6">
                             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#072342]">
                                 {icon}
                             </div>

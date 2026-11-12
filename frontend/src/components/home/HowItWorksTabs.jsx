@@ -53,9 +53,9 @@ function HowItWorksTabs() {
                     </div>
                 </div>
 
-                <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <ol className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
                     {STEPS[tab].map((s, i) => (
-                        <li key={s.title} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:p-6">
+                        <li key={s.title} className="w-[82%] shrink-0 snap-start rounded-2xl border border-white/10 bg-white/[0.04] p-5 sm:w-auto md:p-6">
                             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D19F3E] font-bold text-[#072342]">
                                 {i + 1}
                             </span>

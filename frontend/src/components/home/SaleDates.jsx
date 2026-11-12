@@ -24,9 +24,11 @@ const closesWhen = (dayKey) => {
     return `Closes in ${days} days`;
 };
 
-// Where "Enter Lots" goes: the create-listing page for accounts that can list,
-// otherwise the Sell page (which explains how to list).
+// Where "Enter Lots" goes: the create-listing page for anyone logged in
+// (buyers use the seller one, as the mobile menu's "Sell" does), otherwise
+// the Sell page, which explains how to list.
 const CREATE_LISTING = {
+    bidder: "/seller/auctions/create",
     seller: "/seller/auctions/create",
     company: "/company/auctions/create",
     broker: "/broker/auctions/create",
@@ -35,7 +37,7 @@ const CREATE_LISTING = {
 
 function SaleDates() {
     const { user } = useAuth();
-    const enterLotsPath = (user && CREATE_LISTING[user.userType]) || "/sell";
+    const enterLotsPath = user ? CREATE_LISTING[user.userType] || "/seller/auctions/create" : "/sell";
     const [dates, setDates] = useState([]);
 
     useEffect(() => {
@@ -80,14 +82,14 @@ function SaleDates() {
                                 to={`/catalogue/${c._id}`}
                                 className="group flex w-[88%] shrink-0 snap-start items-center gap-4 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#D19F3E] hover:shadow-md md:w-auto"
                             >
-                                <div className="h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100 md:h-20 md:w-24">
+                                <div className="h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100 md:h-28 md:w-36">
                                     {c.image?.url && (
                                         <img src={c.image.url} alt="" loading="lazy" className="h-full w-full object-cover" />
                                     )}
                                 </div>
                                 <div className="min-w-0">
                                     <p className="flex items-center gap-1.5 text-lg font-bold text-[#072342] md:text-base">
-                                        <CalendarDays size={16} className="shrink-0 text-[#D19F3E]" />
+                                        <CalendarDays className="h-4 w-4 shrink-0 text-[#D19F3E] md:h-5 md:w-5" />
                                         {dayLabel(key)}
                                     </p>
                                     <p className="mt-1 text-base text-gray-600 md:text-sm">{closesWhen(key)}</p>
