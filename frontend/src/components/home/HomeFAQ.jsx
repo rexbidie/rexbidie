@@ -34,7 +34,7 @@ function HomeFAQ() {
             <Container>
                 <div className="grid gap-8 lg:grid-cols-[1fr_2fr] lg:gap-14">
                     <div>
-                        <SectionHeading eyebrow="Questions" title="Good to know" />
+                        <SectionHeading eyebrow="Questions" title="Good to Know" />
                         <p className="-mt-4 text-gray-600">
                             More answers in our{" "}
                             <Link to="/faqs" className="font-semibold text-[#A17B35] underline">FAQs</Link> and{" "}
@@ -44,11 +44,11 @@ function HomeFAQ() {
                     <div className="divide-y divide-gray-200 border-y border-gray-200">
                         {QA.map(({ q, a }) => (
                             <details key={q} className="group py-4">
-                                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left font-semibold text-[#072342]">
+                                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left text-[17px] font-semibold text-[#072342] md:text-base">
                                     {q}
                                     <ChevronDown size={18} className="shrink-0 text-[#A17B35] transition-transform group-open:rotate-180" />
                                 </summary>
-                                <p className="mt-3 leading-relaxed text-gray-600">{a}</p>
+                                <p className="mt-3 text-[17px] leading-relaxed text-gray-600 md:text-base">{a}</p>
                             </details>
                         ))}
                     </div>

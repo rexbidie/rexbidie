@@ -7,14 +7,14 @@ import SectionHeading from "./SectionHeading";
 
 const STEPS = {
     selling: [
-        { title: "Create your listing", text: "Photos, details and your reserve. It takes about 5 minutes." },
-        { title: "Pick a sale date", text: "Choose from the dates available." },
-        { title: "Buyers compete", text: "Buyers bid against each other online, the highest bidder wins if the reserve is met." },
-        { title: "Get paid", text: "We collect the money from the buyer, and pay you securely after collection." },
+        { title: "Create Your Listing", text: "Photos, details and your reserve. It takes about 5 minutes." },
+        { title: "Pick a Sale Date", text: "Choose from the dates available." },
+        { title: "Buyers Compete", text: "Buyers bid against each other online, the highest bidder wins if the reserve is met." },
+        { title: "Get Paid", text: "We collect the money from the buyer, and pay you securely after collection." },
     ],
     buying: [
-        { title: "Register free", text: "Create an account and browse machines from sellers across Ireland." },
-        { title: "Bid online", text: "The buyer fee is shown before you bid." },
+        { title: "Register Free", text: "Create an account and browse machines from sellers across Ireland." },
+        { title: "Bid Online", text: "The buyer fee is shown before you bid." },
         { title: "Pay RexBid", text: "Within 48 hours. Card under €1,000, bank transfer above." },
         { title: "Collect", text: "Within 3 working days of payment, or get a transport quote from EVOLVE." },
     ],
@@ -34,7 +34,7 @@ function HowItWorksTabs() {
                 <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#E8B86B]">How it works</p>
-                        <h2 className="text-xl font-bold leading-tight md:text-[2rem]">Simple from start to finish</h2>
+                        <h2 className="text-[1.6rem] font-bold leading-tight md:text-[2rem]">Simple From Start to Finish</h2>
                     </div>
                     <div role="tablist" className="inline-flex self-start rounded-full bg-white/10 p-1">
                         {["selling", "buying"].map((t) => (
@@ -59,8 +59,8 @@ function HowItWorksTabs() {
                             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D19F3E] font-bold text-[#072342]">
                                 {i + 1}
                             </span>
-                            <h3 className="mt-3 text-base font-bold md:mt-4 md:text-lg">{s.title}</h3>
-                            <p className="mt-1.5 text-[15px] leading-relaxed text-gray-300 md:mt-2 md:text-base">{s.text}</p>
+                            <h3 className="mt-3 text-lg font-bold md:mt-4">{s.title}</h3>
+                            <p className="mt-1.5 text-[17px] leading-relaxed text-gray-300 md:mt-2 md:text-base">{s.text}</p>
                         </li>
                     ))}
                 </ol>

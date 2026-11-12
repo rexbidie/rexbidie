@@ -23,14 +23,14 @@ function HomeBuyItNow({ lots }) {
                             <p className="inline-flex items-center gap-1.5 rounded-full bg-[#D19F3E] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#072342]">
                                 <Clock size={12} /> 48 hours only
                             </p>
-                            <h2 id="home-bin-heading" className="mt-2 text-xl font-bold text-white md:text-2xl">Buy It Now</h2>
-                            <p className="text-sm text-gray-300">Missed their reserve, now at a fixed price at least 10% below it. First buyer gets it.</p>
+                            <h2 id="home-bin-heading" className="mt-2 text-[1.6rem] font-bold text-white md:text-2xl">Buy It Now</h2>
+                            <p className="text-base text-gray-300 md:text-sm">Missed their reserve, now at a fixed price at least 10% below it. First buyer gets it.</p>
                         </div>
                         <Link
                             to="/buy-it-now"
                             className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D19F3E] px-5 py-2.5 text-base font-semibold text-[#072342] transition hover:bg-[#E8B86B] sm:w-auto"
                         >
-                            See all {live.length} <ArrowRight size={18} />
+                            See All {live.length} <ArrowRight size={18} />
                         </Link>
                     </div>
 
@@ -38,7 +38,7 @@ function HomeBuyItNow({ lots }) {
                         {shown.map((lot) => {
                             const urgent = new Date(lot.endsAt).getTime() - now < 6 * 36e5;
                             return (
-                                <li key={lot._id} className="w-[75%] shrink-0 snap-start sm:w-[45%] md:w-auto">
+                                <li key={lot._id} className="w-[86%] shrink-0 snap-start sm:w-[45%] md:w-auto">
                                     <Link to={`/auction/${lot._id}`} className="group flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-white/10 transition hover:ring-2 hover:ring-[#D19F3E]">
                                         <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                                             {lot.photo && <img src={lot.photo.thumbUrl || lot.photo.url} alt={lot.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
@@ -47,13 +47,13 @@ function HomeBuyItNow({ lots }) {
                                             </span>
                                         </div>
                                         <div className="flex flex-1 flex-col p-3">
-                                            <h3 className="line-clamp-2 text-sm font-semibold text-gray-900 group-hover:underline">{lot.title}</h3>
-                                            {lot.location && <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500"><MapPin size={11} /> {lot.location}</p>}
-                                            <p className="mt-auto pt-2 text-lg font-bold text-gray-900">
+                                            <h3 className="line-clamp-2 text-base font-semibold text-gray-900 group-hover:underline md:text-sm">{lot.title}</h3>
+                                            {lot.location && <p className="mt-0.5 flex items-center gap-1 text-sm text-gray-500 md:text-xs"><MapPin size={12} /> {lot.location}</p>}
+                                            <p className="mt-auto pt-2 text-xl font-bold text-gray-900 md:text-lg">
                                                 {money(lot.price, lot.displayCurrency)}
                                                 {lot.vatIncluded && <span className="ml-1 text-[11px] font-normal text-gray-500">+ VAT</span>}
                                             </p>
-                                            <span className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#edcd1f] py-1.5 text-xs font-semibold text-black">
+                                            <span className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#edcd1f] py-2.5 text-sm font-semibold text-black md:py-1.5 md:text-xs">
                                                 <ShoppingCart size={14} /> Buy It Now
                                             </span>
                                         </div>

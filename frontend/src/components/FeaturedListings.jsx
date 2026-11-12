@@ -125,7 +125,7 @@ const FeaturedListings = () => {
             <Container className="pt-14">
                 <div className="mb-8">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A17B35]">Featured</p>
-                    <h2 className="text-2xl font-bold leading-tight text-[#072342] md:text-[2rem]">Featured machinery</h2>
+                    <h2 className="text-[1.6rem] font-bold leading-tight text-[#072342] md:text-[2rem]">Featured Machinery</h2>
                 </div>
                 {/* <p className="text-gray-500 mt-1">
                         Premium machinery and vehicles handpicked by RexBid
@@ -159,7 +159,7 @@ const FeaturedListings = () => {
                             </h2> */}
                             <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A17B35]">Featured</p>
-                    <h2 className="text-2xl font-bold leading-tight text-[#072342] md:text-[2rem]">Featured machinery</h2>
+                    <h2 className="text-[1.6rem] font-bold leading-tight text-[#072342] md:text-[2rem]">Featured Machinery</h2>
                 </div>
                             {/* <p className="text-gray-500 mt-1">
                                 Premium machinery and vehicles handpicked by RexBid
@@ -174,7 +174,7 @@ const FeaturedListings = () => {
                         {liveAuctions.map((listing, index) => (
                             <div
                                 key={listing._id}
-                                className={`w-[85%] shrink-0 snap-start sm:w-auto transition-all duration-1000 ease-out ${visible
+                                className={`w-[90%] shrink-0 snap-start sm:w-auto transition-all duration-1000 ease-out ${visible
                                     ? "translate-y-0 opacity-100"
                                     : "translate-y-10 opacity-0"
                                     }`}
@@ -225,7 +225,7 @@ const FeaturedListings = () => {
                         onClick={handleViewAll}
                         className="group flex w-full items-center justify-center gap-2 bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] text-white text-lg font-semibold rounded-xl hover:bg-gradient-to-r hover:from-[#D19F3E]/90 hover:to-[#E8B86B]/90 px-10 py-4 sm:w-auto transition-all duration-300 hover:bg-[#e4a000] hover:shadow-[0_0_35px_rgba(197,157,85,0.25)] focus:outline-none focus:ring-2 focus:ring-[#F5B51B] focus:ring-offset-2"
                     >
-                        <span>See all machinery</span>
+                        <span>See All Machinery</span>
                         <ArrowRight
                             size={22}
                             className="transition-transform duration-300 group-hover:translate-x-1"

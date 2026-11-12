@@ -5,8 +5,8 @@ const SectionHeading = ({ eyebrow, title, intro, align = "left", action }) => (
             {eyebrow && (
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A17B35]">{eyebrow}</p>
             )}
-            <h2 className="text-xl font-bold leading-tight text-[#072342] md:text-[2rem]">{title}</h2>
-            {intro && <p className="mt-2 text-[15px] leading-relaxed text-gray-600 md:mt-3 md:text-base">{intro}</p>}
+            <h2 className="text-[1.6rem] font-bold leading-tight text-[#072342] md:text-[2rem]">{title}</h2>
+            {intro && <p className="mt-2 text-[17px] leading-relaxed text-gray-600 md:mt-3 md:text-base">{intro}</p>}
         </div>
         {action}
     </div>
