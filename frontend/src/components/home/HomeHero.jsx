@@ -19,8 +19,11 @@ function ClosingNextPanel({ items, currency }) {
         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-[0_20px_50px_-25px_rgba(7,35,66,0.35)] md:p-5">
             <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-[#072342]">Closing next</p>
-                <Link to="/auctions" className="text-sm font-medium text-[#A17B35] hover:underline">
-                    See all
+                <Link
+                    to="/auctions"
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-[#D19F3E] px-4 py-1.5 text-sm font-semibold text-[#A17B35] transition hover:bg-[#D19F3E] hover:text-white md:text-base"
+                >
+                    See all <ArrowRight size={16} />
                 </Link>
             </div>
             <ul className="divide-y divide-gray-100">

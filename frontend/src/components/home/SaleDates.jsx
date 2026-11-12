@@ -43,8 +43,11 @@ function SaleDates() {
                     title="Upcoming sale dates"
                     intro="Choose a date when you list, and your machine goes in front of buyers alongside others closing that day."
                     action={
-                        <Link to="/catalogues" className="inline-flex items-center gap-1.5 font-semibold text-[#A17B35] hover:underline">
-                            All sale dates <ArrowRight size={16} />
+                        <Link
+                            to="/catalogues"
+                            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border-2 border-[#D19F3E] px-5 py-2.5 text-base font-semibold text-[#A17B35] transition hover:bg-[#D19F3E] hover:text-white"
+                        >
+                            All sale dates <ArrowRight size={18} />
                         </Link>
                     }
                 />

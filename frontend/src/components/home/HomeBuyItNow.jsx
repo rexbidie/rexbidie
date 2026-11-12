@@ -26,8 +26,11 @@ function HomeBuyItNow({ lots }) {
                             <h2 id="home-bin-heading" className="mt-2 text-xl font-bold text-white md:text-2xl">Buy It Now</h2>
                             <p className="text-sm text-gray-300">Missed their reserve, now at a fixed price at least 10% below it. First buyer gets it.</p>
                         </div>
-                        <Link to="/buy-it-now" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#E8B86B] hover:underline">
-                            See all {live.length} <ArrowRight size={16} />
+                        <Link
+                            to="/buy-it-now"
+                            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D19F3E] px-5 py-2.5 text-base font-semibold text-[#072342] transition hover:bg-[#E8B86B] sm:w-auto"
+                        >
+                            See all {live.length} <ArrowRight size={18} />
                         </Link>
                     </div>
 
@@ -37,8 +40,8 @@ function HomeBuyItNow({ lots }) {
                             return (
                                 <li key={lot._id} className="w-[75%] shrink-0 snap-start sm:w-[45%] md:w-auto">
                                     <Link to={`/auction/${lot._id}`} className="group flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-white/10 transition hover:ring-2 hover:ring-[#D19F3E]">
-                                        <div className="relative aspect-[4/3] bg-gray-100">
-                                            {lot.photo && <img src={lot.photo.thumbUrl || lot.photo.url} alt={lot.title} loading="lazy" className="h-full w-full object-cover" />}
+                                        <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+                                            {lot.photo && <img src={lot.photo.thumbUrl || lot.photo.url} alt={lot.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
                                             <span className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${urgent ? "bg-red-600" : "bg-black/75"}`}>
                                                 <Clock size={11} /> {timeLeft(lot.endsAt, now)}
                                             </span>

@@ -151,13 +151,13 @@ const FeaturedListings = () => {
                         : "translate-y-8 opacity-0"
                         }`}
                 >
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
                         <div>
                             {/* <h2 className="text-3xl md:text-4xl font-bold text-primary flex items-center gap-2">
                                 <Star className="text-[#D19F3E]" size={28} />
                                 Featured Listings
                             </h2> */}
-                            <div className="mb-8">
+                            <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A17B35]">Featured</p>
                     <h2 className="text-2xl font-bold leading-tight text-[#072342] md:text-[2rem]">Featured machinery</h2>
                 </div>
@@ -207,7 +207,7 @@ const FeaturedListings = () => {
 
                 {/* Load More / View All buttons */}
                 <div
-                    className={`flex justify-center gap-4 mt-10 transition-all delay-[900ms] duration-1000 ease-out ${visible
+                    className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 mt-10 transition-all delay-[900ms] duration-1000 ease-out ${visible
                         ? "translate-y-0 opacity-100"
                         : "translate-y-6 opacity-0"
                         }`}
@@ -216,18 +216,18 @@ const FeaturedListings = () => {
                         <button
                             onClick={handleLoadMore}
                             disabled={loading}
-                            className="px-8 py-3 bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+                            className="px-8 py-4 border-2 border-[#D19F3E] text-[#A17B35] text-lg font-semibold rounded-xl hover:bg-[#D19F3E] hover:text-white transition-all disabled:opacity-50"
                         >
                             {loading ? "Loading..." : "Load More"}
                         </button>
                     )}
                     <button
                         onClick={handleViewAll}
-                        className="group flex items-center gap-2 bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] text-white font-medium rounded-lg hover:bg-gradient-to-r hover:from-[#D19F3E]/90 hover:to-[#E8B86B]/90 px-8 py-3 transition-all duration-300 hover:bg-[#e4a000] hover:shadow-[0_0_35px_rgba(197,157,85,0.25)] focus:outline-none focus:ring-2 focus:ring-[#F5B51B] focus:ring-offset-2"
+                        className="group flex w-full items-center justify-center gap-2 bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] text-white text-lg font-semibold rounded-xl hover:bg-gradient-to-r hover:from-[#D19F3E]/90 hover:to-[#E8B86B]/90 px-10 py-4 sm:w-auto transition-all duration-300 hover:bg-[#e4a000] hover:shadow-[0_0_35px_rgba(197,157,85,0.25)] focus:outline-none focus:ring-2 focus:ring-[#F5B51B] focus:ring-offset-2"
                     >
                         <span>See all machinery</span>
                         <ArrowRight
-                            size={18}
+                            size={22}
                             className="transition-transform duration-300 group-hover:translate-x-1"
                         />
                     </button>
