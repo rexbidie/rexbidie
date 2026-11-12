@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileText, Eye, Send, RefreshCw, Search, X, Receipt, History, XCircle, RotateCcw, Banknote, Link2, Unlock, Landmark, CheckCircle } from "lucide-react";
+import { AlertTriangle, FileText, Eye, Send, RefreshCw, Search, X, Receipt, History, XCircle, RotateCcw, Banknote, Link2, Unlock, Landmark, CheckCircle, Pencil, Upload } from "lucide-react";
 import { toast } from "react-hot-toast";
 import axiosInstance from "../../utils/axiosInstance";
 import { AdminContainer, AdminHeader, AdminSidebar, LoadingSpinner } from "../../components";
@@ -660,6 +660,45 @@ function Sales() {
         }
     };
 
+    const editBuyerFee = async (s) => {
+        const value = window.prompt(`Buyer fee for ${s.reference} (${s.title}), in ${s.currency}:`, String(s.buyerFee ?? 0));
+        if (value === null) return;
+        const note = window.prompt("Note (kept on the sale), e.g. \"3% charged by hand on the payment request\":", "") ?? "";
+        try {
+            const { data } = await axiosInstance.patch(`/api/v1/admin/sales/${s._id}/buyer-fee`, { fee: value, note });
+            toast.success(`${s.reference}: buyer fee ${formatMoney(data.data.buyerFee, s.currency)}, total ${formatMoney(data.data.total, s.currency)}`);
+            load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Could not change the buyer fee");
+        }
+    };
+
+    // CSV with an auction/lot ID column and a buyer fee column (header row optional).
+    const importBuyerFees = async (file) => {
+        if (!file) return;
+        const text = await file.text();
+        const rows = [];
+        for (const line of text.split(/\r?\n/)) {
+            const cells = line.split(/[,;\t]/).map((c) => c.replace(/^"|"$/g, "").trim());
+            const id = cells.find((c) => /^[a-f0-9]{24}$/i.test(c));
+            const fee = cells.filter((c) => c !== id).map((c) => c.replace(/[€£,\s]/g, "")).find((c) => /^\d+(\.\d+)?$/.test(c));
+            if (id && fee !== undefined) rows.push({ auctionId: id, fee: Number(fee) });
+        }
+        if (!rows.length) return toast.error("No rows found. The file needs a lot ID column and a buyer fee column.");
+        if (!window.confirm(`Apply buyer fees to ${rows.length} earlier sale${rows.length === 1 ? "" : "s"}?\n\nOnly earlier sales are changed. No emails are sent.`)) return;
+        setSending(true);
+        try {
+            const { data } = await axiosInstance.post("/api/v1/admin/sales/import-buyer-fees", { rows });
+            const r = data.data;
+            toast.success(`Buyer fees: ${r.updated} updated, ${r.unchanged} already right${r.notFound.length ? `, ${r.notFound.length} not found` : ""}${r.skipped.length ? `, ${r.skipped.length} skipped` : ""}`, { duration: 10000 });
+            await load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Import failed");
+        } finally {
+            setSending(false);
+        }
+    };
+
     const findStripePayments = async () => {
         setSending(true);
         try {
@@ -725,6 +764,12 @@ function Sales() {
                                 <button onClick={load} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm">
                                     <RefreshCw size={16} /> Refresh
                                 </button>
+                                {tab === "historical" && (
+                                    <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm cursor-pointer ${sending ? "opacity-50 pointer-events-none" : ""}`}>
+                                        <Upload size={16} /> Import buyer fees
+                                        <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => { importBuyerFees(e.target.files?.[0]); e.target.value = ""; }} />
+                                    </label>
+                                )}
                                 {historicalCount === 0 && (
                                     <button onClick={importHistory} disabled={sending} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm">
                                         <History size={16} /> Import earlier sales
@@ -931,7 +976,14 @@ function Sales() {
                                                         </button>
                                                     )}
                                                 </td>
-                                                <td className="p-3 align-top text-right whitespace-nowrap">{formatMoney(s.buyerFee, s.currency)}</td>
+                                                <td className="p-3 align-top text-right whitespace-nowrap">
+                                                    {formatMoney(s.buyerFee, s.currency)}
+                                                    {(s.historical || ["sold", "failed"].includes(s.status)) && (
+                                                        <button title="Change buyer fee" onClick={() => editBuyerFee(s)} className="ml-1 text-gray-400 hover:text-primary align-middle">
+                                                            <Pencil size={13} />
+                                                        </button>
+                                                    )}
+                                                </td>
                                                 <td className="p-3 align-top text-right whitespace-nowrap font-semibold">{formatMoney(s.total, s.currency)}</td>
                                                 <td className="p-3 align-top">
                                                     <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_STYLES[s.status] || "bg-gray-100"}`}>
