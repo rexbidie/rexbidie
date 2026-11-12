@@ -14,9 +14,10 @@ const WhySell = lazy(() => import("../components/home/WhySell"));
 const HowItWorksTabs = lazy(() => import("../components/home/HowItWorksTabs"));
 const HomeFAQ = lazy(() => import("../components/home/HomeFAQ"));
 const SellerCTA = lazy(() => import("../components/home/SellerCTA"));
+const ClientReviews = lazy(() => import("../components/home/ClientReviews"));
 
 function Home() {
-    // Listings closing next: feeds the "closing now" banner and the hero panel.
+    // Listings closing next: feeds the "closing now" banner.
     const { items, currency } = useClosingNext(12);
 
     // The listing the banner is showing (next to close today, Irish time).
@@ -42,23 +43,26 @@ function Home() {
         <>
             <HomeBuyItNow lots={binLots} />
             <LiveNowBanner items={items} currency={currency} belowBin={binLive} />
-            <HomeHero items={items} currency={currency} excludeId={liveNow?._id} belowBanner={!!liveNow || binLive} />
+            <HomeHero belowBanner={!!liveNow || binLive} />
 
+            {/* Order: Buy It Now, hero, Featured, Sale Dates, Reviews, Recently Sold,
+                EVOLVE delivery, Why Sell, How It Works, Good to Know. */}
             <Suspense fallback={null}>
-                <SaleDates />
                 <div className="bg-white pt-4">
                     <FeaturedListings />
                 </div>
+                <SaleDates />
+                <ClientReviews />
+                <RecentlySold />
                 <Container>
                     <PromoBanner
                         logoUrl={evolve}
-                        title="Nationwide delivery with our transport partner EVOLVE"
+                        title="Nationwide Delivery With Our Transport Partner EVOLVE"
                         description="Get a quote for any machine on RexBid."
-                        buttonText="Get a quote"
+                        buttonText="Get a Quote"
                         buttonLink="/delivery-partner-quote"
                     />
                 </Container>
-                <RecentlySold />
                 <WhySell />
                 <HowItWorksTabs />
                 <HomeFAQ />

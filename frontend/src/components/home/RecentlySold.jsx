@@ -38,7 +38,7 @@ function RecentlySold() {
             <Container>
                 <SectionHeading
                     eyebrow="Results"
-                    title="Recently sold on RexBid"
+                    title="Recently Sold on RexBid"
                     intro="Real prices from real Irish sellers."
                 />
                 <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0">
@@ -46,7 +46,7 @@ function RecentlySold() {
                         <Link
                             key={a._id}
                             to={`/auction/${a._id}`}
-                            className="group w-[62%] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:shadow-md sm:w-[40%] md:w-auto"
+                            className="group w-[80%] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:shadow-md sm:w-[40%] md:w-auto"
                         >
                             <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                                 {a.photos?.[0]?.url && (
@@ -62,15 +62,15 @@ function RecentlySold() {
                                 </span>
                             </div>
                             <div className="p-3.5">
-                                <p className="truncate font-semibold text-gray-900">{a.title}</p>
+                                <p className="truncate text-lg font-semibold text-gray-900 md:text-base">{a.title}</p>
                                 {a.location && (
-                                    <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-gray-500">
+                                    <p className="mt-0.5 flex items-center gap-1 truncate text-sm text-gray-500 md:text-xs">
                                         <MapPin size={12} className="shrink-0" /> {a.location}
                                     </p>
                                 )}
-                                <p className="mt-2 text-sm text-gray-600">
+                                <p className="mt-2 text-base text-gray-600 md:text-sm">
                                     Sold for{" "}
-                                    <span className="text-lg font-bold text-[#072342]">
+                                    <span className="text-xl font-bold text-[#072342] md:text-lg">
                                         {money(a.convertedFinalPrice ?? a.finalPrice ?? a.currentPrice, currency)}
                                     </span>
                                 </p>

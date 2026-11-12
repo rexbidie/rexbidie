@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarDays } from "lucide-react";
+import { ArrowRight, CalendarDays, Plus } from "lucide-react";
 import Container from "../Container";
+import { useAuth } from "../../contexts/AuthContext";
 import axiosInstance from "../../utils/axiosInstance";
 import { getDayKey } from "../../utils/catalogueDate";
 
@@ -23,7 +24,20 @@ const closesWhen = (dayKey) => {
     return `Closes in ${days} days`;
 };
 
+// Where "Enter Lots" goes: the create-listing page for anyone logged in
+// (buyers use the seller one, as the mobile menu's "Sell" does), otherwise
+// the Sell page, which explains how to list.
+const CREATE_LISTING = {
+    bidder: "/seller/auctions/create",
+    seller: "/seller/auctions/create",
+    company: "/company/auctions/create",
+    broker: "/broker/auctions/create",
+    admin: "/admin/auctions/create",
+};
+
 function SaleDates() {
+    const { user } = useAuth();
+    const enterLotsPath = user ? CREATE_LISTING[user.userType] || "/seller/auctions/create" : "/sell";
     const [dates, setDates] = useState([]);
 
     useEffect(() => {
@@ -40,12 +54,22 @@ function SaleDates() {
             <Container>
                 <SectionHeading
                     eyebrow="Sale dates"
-                    title="Upcoming sale dates"
-                    intro="Choose a date when you list, and your machine goes in front of buyers alongside others closing that day."
+                    title="Upcoming Sale Dates"
                     action={
-                        <Link to="/catalogues" className="inline-flex items-center gap-1.5 font-semibold text-[#A17B35] hover:underline">
-                            All sale dates <ArrowRight size={16} />
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                        <Link
+                            to={enterLotsPath}
+                            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] px-5 py-2.5 text-base font-semibold text-[#072342] transition hover:shadow-md"
+                        >
+                            <Plus size={18} /> Enter Lots
                         </Link>
+                        <Link
+                            to="/catalogues"
+                            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border-2 border-[#D19F3E] px-5 py-2.5 text-base font-semibold text-[#A17B35] transition hover:bg-[#D19F3E] hover:text-white"
+                        >
+                            All Sale Dates <ArrowRight size={18} />
+                        </Link>
+                        </div>
                     }
                 />
 
@@ -56,20 +80,20 @@ function SaleDates() {
                             <Link
                                 key={c._id}
                                 to={`/catalogue/${c._id}`}
-                                className="group flex w-[78%] shrink-0 snap-start items-center gap-4 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#D19F3E] hover:shadow-md md:w-auto"
+                                className="group flex w-[88%] shrink-0 snap-start items-center gap-4 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#D19F3E] hover:shadow-md md:w-auto"
                             >
-                                <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                                <div className="h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100 md:h-28 md:w-36">
                                     {c.image?.url && (
                                         <img src={c.image.url} alt="" loading="lazy" className="h-full w-full object-cover" />
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="flex items-center gap-1.5 font-bold text-[#072342]">
-                                        <CalendarDays size={16} className="shrink-0 text-[#D19F3E]" />
+                                    <p className="flex items-center gap-1.5 text-lg font-bold text-[#072342] md:text-base">
+                                        <CalendarDays className="h-4 w-4 shrink-0 text-[#D19F3E] md:h-5 md:w-5" />
                                         {dayLabel(key)}
                                     </p>
-                                    <p className="mt-1 text-sm text-gray-600">{closesWhen(key)}</p>
-                                    <p className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#A17B35]">
+                                    <p className="mt-1 text-base text-gray-600 md:text-sm">{closesWhen(key)}</p>
+                                    <p className="mt-2 inline-flex items-center gap-1 text-base font-semibold text-[#A17B35] md:text-sm">
                                         View machines
                                         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                                     </p>
