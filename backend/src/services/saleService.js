@@ -760,3 +760,58 @@ export const matchOutsideStripePayments = async ({ limit = 30 } = {}) => {
     }
     return { matched };
 };
+
+// ─── Correcting the buyer fee ──────────────────────────────
+
+/**
+ * Sets the buyer fee on a sale (and its auction), e.g. for earlier sales that
+ * sold before buyer fees were switched on in Admin → Commissions and were
+ * charged by hand. Current sales can only be changed before a payment
+ * request goes out.
+ */
+export const setBuyerFee = async (saleOrId, fee, note, admin = null) => {
+    const sale = saleOrId?.save ? saleOrId : await Sale.findById(saleOrId);
+    if (!sale) throw Object.assign(new Error("Sale not found"), { status: 404 });
+    const value = round2(Number(fee));
+    if (!Number.isFinite(value) || value < 0) throw Object.assign(new Error("Enter a buyer fee of 0 or more"), { status: 400 });
+    if (!sale.historical && !["sold", "failed"].includes(sale.status)) {
+        throw Object.assign(new Error("The buyer fee can only be changed before the payment request is sent"), { status: 400 });
+    }
+    if (value === round2(sale.buyerFee || 0)) return { sale, changed: false };
+    const before = sale.buyerFee || 0;
+    sale.buyerFee = value;
+    applyVat(sale); // recalculates the total
+    sale.notes.push({ text: `Buyer fee changed from ${before} to ${value} ${sale.currency}${note?.trim() ? `: ${note.trim()}` : ""}`, by: admin?._id });
+    await sale.save();
+    await Auction.updateOne({ _id: sale.auction }, { $set: { bidderCommissionAmount: value } });
+    return { sale, changed: true };
+};
+
+/**
+ * Applies buyer fees from a list of { auctionId, fee } (e.g. exported from
+ * the finance tracker). Only earlier sales are changed.
+ */
+export const importBuyerFees = async (rows, admin) => {
+    const result = { updated: 0, unchanged: 0, notFound: [], skipped: [] };
+    for (const row of rows) {
+        const auctionId = String(row?.auctionId || "").trim();
+        if (!/^[a-f0-9]{24}$/i.test(auctionId)) continue;
+        const sale = await Sale.findOne({ auction: auctionId });
+        if (!sale) {
+            result.notFound.push(auctionId);
+            continue;
+        }
+        if (!sale.historical) {
+            result.skipped.push({ reference: sale.reference, reason: "not an earlier sale" });
+            continue;
+        }
+        try {
+            const { changed } = await setBuyerFee(sale, row.fee, "imported from the finance tracker", admin);
+            if (changed) result.updated += 1;
+            else result.unchanged += 1;
+        } catch (err) {
+            result.skipped.push({ reference: sale.reference, reason: err.message });
+        }
+    }
+    return result;
+};

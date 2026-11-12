@@ -484,3 +484,25 @@ export const linkSellerStripeAccount = async (req, res) => {
         fail(res, err);
     }
 };
+
+export const updateBuyerFee = async (req, res) => {
+    try {
+        const { setBuyerFee } = await import("../services/saleService.js");
+        const { sale } = await setBuyerFee(req.params.saleId, req.body?.fee, req.body?.note, req.user);
+        res.json({ success: true, data: { buyerFee: sale.buyerFee, total: sale.total } });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+export const importFees = async (req, res) => {
+    try {
+        const rows = req.body?.rows;
+        if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ success: false, message: "No rows to import" });
+        if (rows.length > 1000) return res.status(400).json({ success: false, message: "Import at most 1,000 rows at a time" });
+        const { importBuyerFees } = await import("../services/saleService.js");
+        res.json({ success: true, data: await importBuyerFees(rows, req.user) });
+    } catch (err) {
+        fail(res, err);
+    }
+};
