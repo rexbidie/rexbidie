@@ -306,9 +306,14 @@ export const sendPayoutSetupEmail = async (req, res) => {
         if (!sale) return res.status(404).json({ success: false, message: "Sale not found" });
         const seller = await User.findById(sale.seller.user);
         if (!seller?.email) return res.status(400).json({ success: false, message: "Seller has no email address" });
-        const { refreshSellerConnect, payoutSetupUrl, ensureConnectAccount } = await import("../services/connectService.js");
+        const { refreshSellerConnect, payoutSetupUrl, ensureConnectAccount, ensureIndividualAccount } = await import("../services/connectService.js");
         const state = payoutState(await refreshSellerConnect(seller));
         if (state === "ready") return res.status(400).json({ success: false, message: "This seller is already set up for payouts" });
+        // Unfinished business accounts become individual accounts.
+        const changed = await ensureIndividualAccount(seller);
+        if (changed !== "unchanged") {
+            sale.notes.push({ text: `Stripe payout account ${changed === "switched" ? "switched" : "replaced"} as an individual account (${seller.stripeConnect?.accountId})`, by: req.user._id });
+        }
         // Create the Stripe account now so it shows in Connected accounts straight away.
         if (state === "none") {
             await ensureConnectAccount(seller);

@@ -138,8 +138,42 @@ export const ensureConnectAccount = async (user) => {
     return acct.id;
 };
 
+/**
+ * Payout accounts should be individuals. An account still set up as a
+ * business that the seller hasn't finished is switched to individual; if
+ * Stripe won't allow that, the unused account is deleted and the seller gets
+ * a fresh individual one. Finished business accounts are left alone.
+ * Returns what happened: "unchanged" | "switched" | "replaced".
+ */
+export const ensureIndividualAccount = async (user) => {
+    const id = user.stripeConnect?.accountId;
+    if (!id) return "unchanged";
+    const acct = await stripe.accounts.retrieve(id);
+    if (acct.business_type !== "company" || acct.details_submitted) return "unchanged";
+    const prefill = prefillFor(user);
+    try {
+        const updated = await stripe.accounts.update(id, {
+            business_type: "individual",
+            ...(prefill.individual ? { individual: prefill.individual } : {}),
+        });
+        user.set("stripeConnect", statusFromAccount(updated));
+        await user.save({ validateBeforeSave: false });
+        return "switched";
+    } catch (err) {
+        console.warn(`Could not switch ${id} to individual (${err.message}); replacing the unfinished account`);
+        await stripe.accounts.del(id);
+        user.set("stripeConnect", { checkedAt: new Date() });
+        await user.save({ validateBeforeSave: false });
+        accountCache.at = 0;
+        await ensureConnectAccount(user);
+        return "replaced";
+    }
+};
+
 /** One-time Stripe link where the seller enters their details and bank account. */
 export const createOnboardingLink = async (user) => {
+    await refreshSellerConnect(user);
+    await ensureIndividualAccount(user);
     const accountId = await ensureConnectAccount(user);
     const base = `${FRONTEND_URL}/${dashboardFor(user)}/payout-methods`;
     const link = await stripe.accountLinks.create({
