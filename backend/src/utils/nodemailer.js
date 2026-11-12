@@ -733,12 +733,34 @@ const auctionSubmittedForApprovalEmail = async (adminEmail, auction, seller) => 
     }
 };
 
-// 7. Auction approved and live for seller
+// "Tuesday 17 November, 19:04" in Irish time.
+const fmtIrish = (date) =>
+    date
+        ? new Date(date).toLocaleString("en-IE", {
+              timeZone: "Europe/Dublin",
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              hour: "2-digit",
+              minute: "2-digit",
+              hourCycle: "h23",
+          })
+        : "";
+
+// 7. Auction approved for seller. Sent when an admin approves a listing.
+// If it starts later, says when it goes live (a "now live" email follows
+// at that time); if it's already started, says it's live now.
 const auctionApprovedEmail = async (seller, listing) => {
     try {
+        const startsLater = listing?.startDate && new Date(listing.startDate) > new Date();
         const content = `
-            <h2 style="text-align: center;">Listing Approved and Live</h2>
-            <p style="text-align: center;">Great news! Your listing has been approved and is now live on ${BRAND_NAME}.</p>
+            <h2 style="text-align: center;">${startsLater ? "Your Listing is Approved" : "Listing Approved and Live"}</h2>
+            <p style="text-align: center;">${
+                startsLater
+                    ? `Great news! Your listing has been approved. It goes live on <strong>${fmtIrish(listing.startDate)}</strong> and we'll email you again when it does.`
+                    : `Great news! Your listing has been approved and is now live on ${BRAND_NAME}.`
+            }</p>
+            ${listing?.endDate ? `<p style="text-align: center;">Closing time: <strong>${fmtIrish(listing.endDate)}</strong> (Irish time)</p>` : ''}
             
             ${createInfoCard(`
                 <p style="margin: 0 0 12px 0;"><strong>Listing Details</strong></p>
@@ -763,10 +785,10 @@ const auctionApprovedEmail = async (seller, listing) => {
             </div>
             
             <div style="text-align: center; margin: 25px 0;">
-                ${createButton('View Your Live Listing', `${FRONTEND_URL}/auction/${listing?._id}`, 'primary')}
+                ${createButton(startsLater ? 'View Your Listing' : 'View Your Live Listing', `${FRONTEND_URL}/auction/${listing?._id}`, 'primary')}
             </div>
             
-            <p>Your item is now searchable and visible to our community. We wish you a quick and successful sale!</p>
+            <p>${startsLater ? 'Buyers can see and bid on it from the start date.' : 'Your item is now searchable and visible to our community.'} We wish you a quick and successful sale!</p>
             
             <p>For any questions about the selling process or if you need assistance, our support team is here to help.</p>
         `;
@@ -776,7 +798,7 @@ const auctionApprovedEmail = async (seller, listing) => {
         const info = await transporter.sendMail({
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: seller.email,
-            subject: `Your Listing is Live: ${listing?.title}`,
+            subject: startsLater ? `Your Listing is Approved: ${listing?.title}` : `Your Listing is Live: ${listing?.title}`,
             html
         });
 
@@ -794,6 +816,7 @@ const auctionListedEmail = async (listing, seller) => {
         const content = `
             <h2>Your Listing is Now Live</h2>
             <p>Great news! Your listing is now active and visible to potential buyers on ${BRAND_NAME}.</p>
+            ${listing?.endDate ? `<p>Closing time: <strong>${fmtIrish(listing.endDate)}</strong> (Irish time)</p>` : ''}
             
             ${createInfoCard(`
                 <p style="margin: 0 0 12px 0;"><strong>Listing Details</strong></p>
