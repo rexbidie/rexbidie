@@ -91,24 +91,24 @@ export const ensureFreshConnect = async (user, maxAgeMs = 60 * 60 * 1000) => {
 };
 
 /**
- * Pre-fills the seller's name so the account is recognisable in the Stripe
- * Dashboard straight away. The seller confirms or corrects it during setup.
+ * Every payout account is set up as an individual (a person), not a business,
+ * even when the seller has a company name on RexBid. The person's name is
+ * pre-filled, and a company name is used as the account's display name so it
+ * is recognisable in the Stripe Dashboard. The seller confirms or corrects
+ * the details during setup.
  */
 export const prefillFor = (user) => {
-    const company = user.companyName?.trim();
-    if (company) {
-        return { business_type: "company", company: { name: company }, business_profile: { name: company } };
-    }
     const first = user.firstName?.trim();
     const last = user.lastName?.trim();
-    if (first || last) {
-        return {
-            business_type: "individual",
-            individual: { ...(first ? { first_name: first } : {}), ...(last ? { last_name: last } : {}), email: user.email },
-            business_profile: { name: [first, last].filter(Boolean).join(" ") },
-        };
-    }
-    return {};
+    const company = user.companyName?.trim();
+    const display = company || [first, last].filter(Boolean).join(" ");
+    return {
+        business_type: "individual",
+        ...(first || last
+            ? { individual: { ...(first ? { first_name: first } : {}), ...(last ? { last_name: last } : {}), email: user.email } }
+            : {}),
+        ...(display ? { business_profile: { name: display } } : {}),
+    };
 };
 
 /** Creates an Express account for the seller if they have none. */
@@ -125,12 +125,12 @@ export const ensureConnectAccount = async (user) => {
     };
     let acct;
     try {
-        acct = await stripe.accounts.create({ ...base, ...prefillFor(user) }, { idempotencyKey: `connect-${user._id}-prefill` });
+        acct = await stripe.accounts.create({ ...base, ...prefillFor(user) }, { idempotencyKey: `connect-${user._id}-individual` });
     } catch (err) {
         // Never block setup over the pre-filled name; the seller enters it anyway.
         if (err?.type !== "StripeInvalidRequestError") throw err;
         console.warn(`Stripe rejected pre-filled details for ${user._id} (${err.message}); creating without them`);
-        acct = await stripe.accounts.create(base, { idempotencyKey: `connect-${user._id}-plain` });
+        acct = await stripe.accounts.create({ ...base, business_type: "individual" }, { idempotencyKey: `connect-${user._id}-individual-plain` });
     }
     user.set("stripeConnect", statusFromAccount(acct));
     await user.save({ validateBeforeSave: false });
