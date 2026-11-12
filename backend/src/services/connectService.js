@@ -91,24 +91,24 @@ export const ensureFreshConnect = async (user, maxAgeMs = 60 * 60 * 1000) => {
 };
 
 /**
- * Pre-fills the seller's name so the account is recognisable in the Stripe
- * Dashboard straight away. The seller confirms or corrects it during setup.
+ * Every payout account is set up as an individual (a person), not a business,
+ * even when the seller has a company name on RexBid. The person's name is
+ * pre-filled, and a company name is used as the account's display name so it
+ * is recognisable in the Stripe Dashboard. The seller confirms or corrects
+ * the details during setup.
  */
 export const prefillFor = (user) => {
-    const company = user.companyName?.trim();
-    if (company) {
-        return { business_type: "company", company: { name: company }, business_profile: { name: company } };
-    }
     const first = user.firstName?.trim();
     const last = user.lastName?.trim();
-    if (first || last) {
-        return {
-            business_type: "individual",
-            individual: { ...(first ? { first_name: first } : {}), ...(last ? { last_name: last } : {}), email: user.email },
-            business_profile: { name: [first, last].filter(Boolean).join(" ") },
-        };
-    }
-    return {};
+    const company = user.companyName?.trim();
+    const display = company || [first, last].filter(Boolean).join(" ");
+    return {
+        business_type: "individual",
+        ...(first || last
+            ? { individual: { ...(first ? { first_name: first } : {}), ...(last ? { last_name: last } : {}), email: user.email } }
+            : {}),
+        ...(display ? { business_profile: { name: display } } : {}),
+    };
 };
 
 /** Creates an Express account for the seller if they have none. */
@@ -125,12 +125,12 @@ export const ensureConnectAccount = async (user) => {
     };
     let acct;
     try {
-        acct = await stripe.accounts.create({ ...base, ...prefillFor(user) }, { idempotencyKey: `connect-${user._id}-prefill` });
+        acct = await stripe.accounts.create({ ...base, ...prefillFor(user) }, { idempotencyKey: `connect-${user._id}-individual` });
     } catch (err) {
         // Never block setup over the pre-filled name; the seller enters it anyway.
         if (err?.type !== "StripeInvalidRequestError") throw err;
         console.warn(`Stripe rejected pre-filled details for ${user._id} (${err.message}); creating without them`);
-        acct = await stripe.accounts.create(base, { idempotencyKey: `connect-${user._id}-plain` });
+        acct = await stripe.accounts.create({ ...base, business_type: "individual" }, { idempotencyKey: `connect-${user._id}-individual-plain` });
     }
     user.set("stripeConnect", statusFromAccount(acct));
     await user.save({ validateBeforeSave: false });
@@ -138,8 +138,42 @@ export const ensureConnectAccount = async (user) => {
     return acct.id;
 };
 
+/**
+ * Payout accounts should be individuals. An account still set up as a
+ * business that the seller hasn't finished is switched to individual; if
+ * Stripe won't allow that, the unused account is deleted and the seller gets
+ * a fresh individual one. Finished business accounts are left alone.
+ * Returns what happened: "unchanged" | "switched" | "replaced".
+ */
+export const ensureIndividualAccount = async (user) => {
+    const id = user.stripeConnect?.accountId;
+    if (!id) return "unchanged";
+    const acct = await stripe.accounts.retrieve(id);
+    if (acct.business_type !== "company" || acct.details_submitted) return "unchanged";
+    const prefill = prefillFor(user);
+    try {
+        const updated = await stripe.accounts.update(id, {
+            business_type: "individual",
+            ...(prefill.individual ? { individual: prefill.individual } : {}),
+        });
+        user.set("stripeConnect", statusFromAccount(updated));
+        await user.save({ validateBeforeSave: false });
+        return "switched";
+    } catch (err) {
+        console.warn(`Could not switch ${id} to individual (${err.message}); replacing the unfinished account`);
+        await stripe.accounts.del(id);
+        user.set("stripeConnect", { checkedAt: new Date() });
+        await user.save({ validateBeforeSave: false });
+        accountCache.at = 0;
+        await ensureConnectAccount(user);
+        return "replaced";
+    }
+};
+
 /** One-time Stripe link where the seller enters their details and bank account. */
 export const createOnboardingLink = async (user) => {
+    await refreshSellerConnect(user);
+    await ensureIndividualAccount(user);
     const accountId = await ensureConnectAccount(user);
     const base = `${FRONTEND_URL}/${dashboardFor(user)}/payout-methods`;
     const link = await stripe.accountLinks.create({

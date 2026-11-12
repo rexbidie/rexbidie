@@ -261,3 +261,19 @@ test("payout: seller gets price + VAT - seller fee", () => {
     assert.equal(netPayout({ itemPrice: 15000, vat: { amount: 3450 }, sellerFee: 450 }), 18000);
     assert.equal(netPayout({ itemPrice: 700, vat: { amount: 0 }, sellerFee: 0 }), 700);
 });
+
+// ─── Stripe payout accounts ────────────────────────────────
+
+import { prefillFor } from "../src/services/connectService.js";
+
+test("connect: payout accounts are always set up as individuals", () => {
+    const company = prefillFor({ firstName: "Pat", lastName: "Byrne", companyName: "Byrne Plant Ltd", email: "p@example.com" });
+    assert.equal(company.business_type, "individual");
+    assert.deepEqual(company.individual, { first_name: "Pat", last_name: "Byrne", email: "p@example.com" });
+    assert.equal(company.business_profile.name, "Byrne Plant Ltd");
+    assert.equal(company.company, undefined);
+    const person = prefillFor({ firstName: "Ann", email: "a@example.com" });
+    assert.equal(person.business_type, "individual");
+    assert.equal(person.business_profile.name, "Ann");
+    assert.deepEqual(prefillFor({ email: "x@example.com" }), { business_type: "individual" });
+});
