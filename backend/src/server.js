@@ -38,6 +38,7 @@ import websiteReviewRouter from "./routes/websiteReview.route.js";
 import metaEventRouter from "./routes/metaEvent.route.js";
 import sitemapRouter from './routes/sitemap.route.js';
 import shareRouter from './routes/share.route.js';
+import { jpegHandler } from './utils/jpegMedia.js';
 import { adminSaleRouter, saleRouter } from "./routes/sale.route.js";
 import connectRouter from "./routes/connect.route.js";
 import { handleStripeWebhook } from "./controllers/payment.controller.js";
@@ -120,6 +121,8 @@ app.get('/api/v1/health', (req, res) => {
 app.use(sitemapRouter);
 // Listing/catalogue HTML with link-preview tags (rexbid.ie rewrites /auction/* and /catalogue/* here)
 app.use(shareRouter);
+// JPEG copies of listing photos for Instagram and link previews (utils/jpegMedia.js)
+app.get(/^\/media\/jpeg\/(.+)$/, jpegHandler);
 
 // Your API routes
 app.use('/api/v1/users', userRouter);

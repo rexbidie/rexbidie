@@ -186,6 +186,8 @@ After deploying, in Events Manager create Custom Conversions for `PlaceBid` and 
 **Ad link tags.** Use the same tags on every ad (Meta ad → Tracking → URL parameters):
 `utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}`
 
+**JPEG photos for social posts.** `GET https://rexbid-backend.onrender.com/media/jpeg/<folder>/<file>` returns a stored photo as a JPEG (max 1440px wide); add `?fit=instagram` to crop into Instagram's 4:5–1.91:1 range (`backend/src/utils/jpegMedia.js`). Only `auction-photos`, `catalogue-images` and `category-images` are allowed, never ID documents. Listing link previews (`og:image`) now use the JPEG copy. Optional Render setting `PUBLIC_BACKEND_URL` if the backend address changes.
+
 **Seller-paid Meta ads** (`metaBoostPackage`): the seller's €10 / €20 / €40 includes Meta's 23% Irish VAT, so the ad's lifetime budget is the price ÷ 1.23 (€8.13 / €16.26 / €32.52), running until the lot closes.
 
 ---
