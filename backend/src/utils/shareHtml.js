@@ -9,6 +9,8 @@
 // listing or catalogue, so the very first HTML response already carries the
 // right title, description, image and price. The page then loads normally.
 
+import { jpegUrlFor } from "./jpegMedia.js";
+
 const SITE = "https://rexbid.ie";
 const DEFAULT_IMAGE = `${SITE}/og-default.jpg`;
 const CURRENCY_SYMBOL = { EUR: "€", GBP: "£" };
@@ -89,7 +91,8 @@ export const buildAuctionMeta = (auction) => {
     const lead = toPlainText(auction.description, 90);
     const description = toPlainText(`${bits.join(" ")} ${lead}`, 158);
 
-    const image = firstPhoto(auction) || DEFAULT_IMAGE;
+    // JPEG copy: Facebook and WhatsApp previews are unreliable with WebP.
+    const image = jpegUrlFor(firstPhoto(auction)) || DEFAULT_IMAGE;
     const specs = auction.specifications || {};
     const brand = specs.brand || specs.Brand || specs.make || specs.Make;
 
