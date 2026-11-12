@@ -467,6 +467,7 @@ export const getBillingInfo = async (req, res) => {
     // Add card details if available
     if (user.cardLast4) {
       billingInfo.card = {
+        id: user.paymentMethodId,
         last4: user.cardLast4,
         brand: user.cardBrand,
         expMonth: user.cardExpMonth,

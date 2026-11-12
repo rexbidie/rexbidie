@@ -30,6 +30,8 @@ import { getManualPaymentFlags } from "../utils/manualPayment.js";
 import { processProxyBids } from "../services/proxyBidService.js";
 import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
 import { minimumPriceError } from "../utils/listingRules.js";
+import { calculateListingExtras } from "../utils/listingExtras.js";
+import { getExtrasPricingMenu } from "../utils/listingExtras.js";
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -41,6 +43,25 @@ const convertPrice = (auction, targetCurrency, priceField) => {
   const rate = rates[base].rates[targetCurrency];
   if (!rate) return auction[priceField];
   return auction[priceField] * rate;
+};
+
+/**
+ * @desc    Get current paid-extras pricing for a given currency
+ * @route   GET /api/v1/auctions/extras/pricing?currency=GBP|EUR
+ * @access  Public
+ */
+export const getListingExtrasPricing = async (req, res) => {
+  try {
+    const currency = req.query.currency === "GBP" ? "GBP" : "EUR";
+    const pricing = getExtrasPricingMenu(currency);
+    res.status(200).json({ success: true, data: pricing });
+  } catch (error) {
+    console.error("Get listing extras pricing error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
 };
 
 // This is a different function to calculate amount. It is different from the convertAmount inside controllers
@@ -444,6 +465,19 @@ export const createAuction = async (req, res) => {
       auctionData.bidIncrement = parseFloat(bidIncrement);
     }
 
+    // ── Compute paid extras before creating the auction ──
+    const extras = calculateListingExtras({
+      featuredRequested: auctionData.featuredRequested,
+      metaBoostPackage: auctionData.metaBoostPackage,
+      currency: auctionData.baseCurrency,
+    });
+
+    // If extras are required on an always-available auction, defer activation
+    // until payment lands. (Timed auctions start as draft anyway.)
+    if (extras.total > 0 && (auctionType === 'buy_now' || auctionType === 'giveaway')) {
+      auctionData.status = 'draft';
+    }
+
     const auction = await Auction.create(auctionData);
 
     // Schedule activation job (always needed for all types)
@@ -463,14 +497,68 @@ export const createAuction = async (req, res) => {
     // Populate seller info for response
     await auction.populate("seller", "username companyName firstName lastName");
 
+    // ── Extras payment flow ──
+    if (extras.total > 0) {
+      // Ensure seller has a Stripe customer (create one if missing)
+      let customerId = seller.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: seller.email,
+          name: `${seller.firstName || ''} ${seller.lastName || ''}`.trim() || seller.username,
+          metadata: { userId: seller._id.toString() },
+        });
+        customerId = customer.id;
+        await User.findByIdAndUpdate(seller._id, { stripeCustomerId: customerId });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: Math.round(extras.total * 100),
+          currency: extras.currency.toLowerCase(),
+          customer: customerId,
+          description: `Listing extras for "${auction.title}"`,
+          payment_method_types: ['card'],
+          metadata: {
+            type: 'listing_extras',
+            auctionId: auction._id.toString(),
+            sellerId: seller._id.toString(),
+          },
+        },
+        { idempotencyKey: `listing_extras_${auction._id}` }
+      );
+
+      auction.extrasPayment = {
+        amount: extras.total,
+        currency: extras.currency,
+        status: 'pending',
+        paymentIntentId: paymentIntent.id,
+        lineItems: extras.lineItems,
+      };
+      await auction.save();
+
+      return res.status(201).json({
+        success: true,
+        message: 'Auction created — please complete payment for paid extras',
+        data: {
+          auction,
+          payment: {
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
+            amount: extras.total,
+            currency: extras.currency,
+            lineItems: extras.lineItems,
+          },
+        },
+      });
+    }
+
     if (auction.status === "active") broadcastAuctionChange(auction._id);
 
+    // No extras — return as before
     res.status(201).json({
       success: true,
       message: "Auction created successfully",
-      data: {
-        auction,
-      },
+      data: { auction },
     });
 
     // Notify admins if needed
@@ -2113,7 +2201,7 @@ export const placeBid = async (req, res) => {
 
     const oldEndDate = auction.endDate;
 
-     const priceBeforeBid = auction.currentPrice;
+    const priceBeforeBid = auction.currentPrice;
 
     // Place bid using the model method
     await auction.placeBid(bidder._id, bidder.username || bidder.companyName, amountInBase);
@@ -4230,5 +4318,105 @@ export const getGiveawayParticipants = async (req, res) => {
       success: false,
       message: "Internal server error while fetching participants",
     });
+  }
+};
+
+/**
+ * @desc    Retry an unpaid extras payment for a draft auction
+ * @route   POST /api/v1/auctions/:id/retry-extras-payment
+ * @access  Private (seller)
+ */
+export const retryExtrasPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sellerId = req.user.id;
+
+    const auction = await Auction.findById(id);
+    if (!auction) {
+      return res.status(404).json({ success: false, message: "Auction not found" });
+    }
+    if (auction.seller.toString() !== sellerId.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    const extras = auction.extrasPayment;
+    if (!extras || !extras.amount || extras.amount <= 0) {
+      return res.status(400).json({ success: false, message: "No extras payment required" });
+    }
+    if (extras.status === "completed") {
+      return res.status(400).json({ success: false, message: "Extras already paid" });
+    }
+
+    // Try to reuse the existing PaymentIntent if it's still payable.
+    let clientSecret = null;
+    let paymentIntentId = extras.paymentIntentId;
+
+    if (paymentIntentId) {
+      try {
+        const existing = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (["requires_payment_method", "requires_confirmation", "requires_action"].includes(existing.status)) {
+          clientSecret = existing.client_secret;
+        }
+      } catch (err) {
+        console.warn("Retry: existing PI not retrievable:", err.message);
+      }
+    }
+
+    // Otherwise create a fresh one (old PI may be cancelled/expired).
+    if (!clientSecret) {
+      const seller = await User.findById(sellerId);
+      if (!seller) {
+        return res.status(404).json({ success: false, message: "Seller not found" });
+      }
+
+      let customerId = seller.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: seller.email,
+          name: `${seller.firstName || ""} ${seller.lastName || ""}`.trim() || seller.username,
+          metadata: { userId: seller._id.toString() },
+        });
+        customerId = customer.id;
+        await User.findByIdAndUpdate(seller._id, { stripeCustomerId: customerId });
+      }
+
+      const pi = await stripe.paymentIntents.create(
+        {
+          amount: Math.round(extras.amount * 100),
+          currency: extras.currency.toLowerCase(),
+          customer: customerId,
+          description: `Listing extras for "${auction.title}"`,
+          payment_method_types: ["card"],
+          metadata: {
+            type: "listing_extras",
+            auctionId: auction._id.toString(),
+            sellerId: seller._id.toString(),
+          },
+        },
+        { idempotencyKey: `listing_extras_retry_${auction._id}_${Date.now()}` }
+      );
+
+      clientSecret = pi.client_secret;
+      paymentIntentId = pi.id;
+
+      await Auction.findByIdAndUpdate(auction._id, {
+        "extrasPayment.paymentIntentId": pi.id,
+        "extrasPayment.status": "pending",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        clientSecret,
+        paymentIntentId,
+        amount: extras.amount,
+        currency: extras.currency,
+        lineItems: extras.lineItems,
+      },
+    });
+  } catch (error) {
+    console.error("Retry extras payment error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

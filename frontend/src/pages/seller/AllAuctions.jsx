@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import BinDashboardModal from "../../components/buyItNow/BinDashboardModal";
 import { LoadingSpinner, LowerReserveModal, SellerContainer, SellerHeader, SellerSidebar } from "../../components";
-import { Gavel, Eye, Award, BarChart3, TrendingUp, DollarSign, Clock, Search, Filter, SortAsc, Users, MoreVertical, Loader, Star } from "lucide-react";
+import { Gavel, Eye, Award, BarChart3, TrendingUp, DollarSign, Clock, Search, Filter, SortAsc, Users, MoreVertical, Loader, Star, CreditCard } from "lucide-react";
+import ListingExtrasPaymentModal from "../../components/listing/ListingExtrasPaymentModal";
 import axiosInstance from "../../utils/axiosInstance";
 import { Link } from "react-router-dom";
 import { useRef } from "react";
@@ -34,6 +35,9 @@ function AllAuctions() {
     const [lowerReserveCurrentAuction, setLowerReserveCurrentAuction] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
 
+    const [extrasPayment, setExtrasPayment] = useState(null);
+    const [pendingAuctionId, setPendingAuctionId] = useState(null);
+
     const handleReserveLowered = (updatedAuction) => {
         setAuctions(prev =>
             prev.map(a => a._id === updatedAuction._id ? { ...a, ...updatedAuction } : a)
@@ -59,6 +63,21 @@ function AllAuctions() {
         setLowerReserveCurrentAuction(auction);
         setIsLowerReserveModalOpen(true);
     }
+
+    const handleRetryExtrasPayment = async (auction) => {
+        try {
+            const { data } = await axiosInstance.post(
+                `/api/v1/auctions/${auction._id}/retry-extras-payment`
+            );
+            if (data.success) {
+                setExtrasPayment(data.data);
+                setPendingAuctionId(auction._id);
+                setActiveDropdown(null);
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to start payment");
+        }
+    };
 
     useEffect(() => {
         const fetchCategoriesForFilter = async () => {
@@ -268,6 +287,21 @@ function AllAuctions() {
                 <SellerHeader />
                 <LowerReserveModal />
 
+                <ListingExtrasPaymentModal
+                    isOpen={!!extrasPayment}
+                    onClose={() => {
+                        setExtrasPayment(null);
+                        setPendingAuctionId(null);
+                    }}
+                    payment={extrasPayment}
+                    auctionId={pendingAuctionId}
+                    onSuccess={() => {
+                        fetchAuctions();
+                        setExtrasPayment(null);
+                        setPendingAuctionId(null);
+                    }}
+                />
+
                 <SellerContainer>
                     <div className="max-w-full pt-16 pb-7 md:pt-0">
                         <h2 className="text-3xl md:text-4xl font-bold my-5">All Auctions</h2>
@@ -437,6 +471,11 @@ function AllAuctions() {
                                                                         <Star size={12} className="mr-1" /> Featured
                                                                     </span>
                                                                 )}
+                                                                {auction.extrasPayment?.status === "pending" && auction.extrasPayment?.amount > 0 && (
+                                                                    <span className="md:ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full inline-flex items-center">
+                                                                        Payment Pending
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -472,6 +511,18 @@ function AllAuctions() {
                                                             {activeDropdown === auction._id && (
                                                                 <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 shadow-lg py-2 z-50 rounded-md min-w-[180px]">
                                                                     <div className="flex flex-col">
+                                                                        {(auction.extrasPayment?.status === "pending" || auction.extrasPayment?.status === "failed") &&
+                                                                            auction.extrasPayment?.amount > 0 && (
+                                                                                <button
+                                                                                    onClick={() => handleRetryExtrasPayment(auction)}
+                                                                                    className="px-4 py-2 text-orange-600 hover:bg-orange-50 transition-colors text-left"
+                                                                                >
+                                                                                    <CreditCard size={16} className="inline mr-2" />
+                                                                                    Complete Payment ({userCurrency === "GBP" ? "£" : "€"}
+                                                                                    {auction.extrasPayment.amount})
+                                                                                </button>
+                                                                            )}
+
                                                                         <Link
                                                                             to={`/auction/${auction._id}`}
                                                                             target="_blank"

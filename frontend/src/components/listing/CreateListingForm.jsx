@@ -43,6 +43,7 @@ import { TouchBackend } from 'react-dnd-touch-backend';
 import { validateMinStart, validateMinReserve, minimumsHint, suggestedIncrement } from '../../utils/listingRules';
 import { FEATURED_FEE_EUR, SELLER_FEES_FREE_UNTIL, META_BOOST_PACKAGES, META_BOOST_MIN_HOURS_BEFORE_CLOSE, extraPriceLabel } from '../../utils/fees';
 import { HowSellingWorks, Hint, Note } from './ListingGuidance';
+import ListingExtrasPaymentModal from "./ListingExtrasPaymentModal";
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -428,6 +429,10 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
     const [loadingFields, setLoadingFields] = useState(false);
     const [loadingCategories, setLoadingCategories] = useState(true);
 
+    const [extrasPayment, setExtrasPayment] = useState(null);
+    const [pendingAuctionId, setPendingAuctionId] = useState(null);
+    const [extrasPricing, setExtrasPricing] = useState(null);
+
     // Track whether listing_start has already fired for this session
     const listingStartedRef = useRef(false);
 
@@ -485,6 +490,27 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
         fetchDates();
     }, []);
 
+    // Fetch current paid-extras pricing for the seller's currency.
+    // The backend is the single source of truth — GBP prices are derived live
+    // from exchange rates and rounded to the nearest £1.
+    useEffect(() => {
+        if (!user?.currency) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axiosInstance.get(
+                    '/api/v1/auctions/extras/pricing',
+                    { params: { currency: user.currency } }
+                );
+                if (!cancelled && data.success) setExtrasPricing(data.data);
+            } catch (err) {
+                console.error('Failed to fetch extras pricing:', err);
+                // Silent — the form falls back to fees.js constants.
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user?.currency]);
+
     const selectedAuctionDateId = watch("auctionDateId");
     const currencySymbol = user?.currency === 'GBP' ? '£' : '€';
     const suggestedIncrementValue = suggestedIncrement(
@@ -505,7 +531,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
     const metaBoostAvailable =
         !selectedAuctionDate ||
         new Date(selectedAuctionDate.endDate).getTime() - Date.now() >=
-            META_BOOST_MIN_HOURS_BEFORE_CLOSE * 60 * 60 * 1000;
+        META_BOOST_MIN_HOURS_BEFORE_CLOSE * 60 * 60 * 1000;
     const selectedMetaPackage =
         metaBoostAvailable
             ? META_BOOST_PACKAGES.find((pkg) => pkg.id === metaBoostPackage)
@@ -915,37 +941,41 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             );
 
             if (data && data.success) {
-                toast.success("Thanks! We'll check your listing within 12 hours and email you when it's live.", { duration: 8000 });
+                toast.success(
+                    data.data?.payment
+                        ? "Auction created — complete payment below to submit for review."
+                        : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
+                    { duration: 8000 }
+                );
 
-                trackMeta('Lead', {
-                    content_ids: data.data?._id ? [String(data.data._id)] : undefined,
+                trackMeta("Lead", {
+                    content_ids: data.data?.auction?._id ? [String(data.data.auction._id)] : undefined,
                     content_name: auctionData.title,
                     content_category: auctionData.parentCategory,
                 });
 
-                gtag('event', 'listing_submit', {
-                    listing_id: data.data?._id,
+                gtag("event", "listing_submit", {
+                    listing_id: data.data?.auction?._id,
                     item_name: auctionData.title,
                     category: auctionData.parentCategory,
-                    seller_type: user?.userType || 'seller',
+                    seller_type: user?.userType || "seller",
                     auction_type: auctionData.auctionType,
                     allow_offers: auctionData.allowOffers || false,
                     vat_included: Boolean(auctionData.vatIncluded),
                     value: Number(auctionData.startPrice || auctionData.buyNowPrice || 0),
                     reserve_price: Number(auctionData.reservePrice || 0),
-                    currency: userCurrency
+                    currency: userCurrency,
                 });
 
-                // Reset form
-                setStep(1);
-                setUploadedPhotos([]);
-                setUploadedDocuments([]);
-                setUploadedServiceRecords([]);
-                setCategoryFields([]);
-                setSubCategories([]);
-                setSelectedParent(null);
-                reset();
-                navigate(`${basePath}/auctions/all`);
+                // NEW: if a payment is required, open the modal and stop here
+                if (data.data?.payment) {
+                    setExtrasPayment(data.data.payment);
+                    setPendingAuctionId(data.data.auction._id);
+                    return;   // ← don't reset / navigate yet
+                }
+
+                // No payment → finish as before
+                finishAuctionCreation();
             }
         } catch (error) {
             const errorMessage = error?.response?.data?.message || 'Failed to create auction';
@@ -954,6 +984,39 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const finishAuctionCreation = () => {
+        setStep(1);
+        setUploadedPhotos([]);
+        setUploadedDocuments([]);
+        setUploadedServiceRecords([]);
+        setCategoryFields([]);
+        setSubCategories([]);
+        setSelectedParent(null);
+        setExtrasPayment(null);
+        setPendingAuctionId(null);
+        reset();
+        navigate(`${basePath}/auctions/all`);
+    };
+
+    // Display price for an extras key, using server-supplied pricing when
+    // available, otherwise the frontend fallback constants.
+    const formatExtrasPrice = (key) => {
+        const sym = (extrasPricing?.currency || user?.currency) === 'GBP' ? '£' : '€';
+
+        if (extrasPricing && extrasPricing[key] !== undefined) {
+            return `${sym}${extrasPricing[key]}`;
+        }
+
+        // Fallback: mirrors fees.js (fixed 0.8 rate) while the fetch is in flight
+        // or if the endpoint is unreachable.
+        const fallbacksEur = { featured: 30, boost: 10, plus: 20, max: 40 };
+        const amount =
+            user?.currency === 'GBP'
+                ? Math.round(fallbacksEur[key] * 0.8)
+                : fallbacksEur[key];
+        return `${sym}${amount}`;
     };
 
     return (
@@ -972,6 +1035,24 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                 <UploadProgressModal
                     isOpen={isLoading}
                     fileCount={uploadedPhotos.length + uploadedDocuments.length + uploadedServiceRecords.length}
+                />
+
+                <ListingExtrasPaymentModal
+                    isOpen={!!extrasPayment}
+                    onClose={() => {
+                        // Seller abandoned payment — draft stays in their account, admin sees it unpaid
+                        toast(
+                            "Your listing was saved as a draft. You can complete payment later from all auctions page in your dashboard.",
+                            { duration: 6000 }
+                        );
+                        finishAuctionCreation();
+                    }}
+                    payment={extrasPayment}
+                    auctionId={pendingAuctionId}
+                    onSuccess={() => {
+                        toast.success("Payment confirmed. Listing submitted for review!");
+                        finishAuctionCreation();
+                    }}
                 />
 
                 <div className="w-full relative">
@@ -1390,7 +1471,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                                         const startPrice = parseFloat(watch('startPrice') || 0);
                                                                         const reservePrice = parseFloat(value);
                                                                         if (reservePrice < startPrice) return 'Reserve price must be greater than or equal to start price';
-                                                                            return validateMinReserve(value, user?.currency);
+                                                                        return validateMinReserve(value, user?.currency);
                                                                     }
                                                                 })}
                                                                 id="reservePrice"
@@ -1564,7 +1645,9 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     <label htmlFor="featuredRequested" className="flex items-start gap-2 rounded-lg border border-[#D19F3E]/50 bg-white p-3 cursor-pointer">
                                                         <input type="checkbox" id="featuredRequested" {...register('featuredRequested')} className="mt-1" />
                                                         <span>
-                                                            <span className="font-semibold text-gray-900">Feature my listing: {extraPriceLabel(FEATURED_FEE_EUR, user?.currency)}</span>
+                                                            <span className="font-semibold text-gray-900">
+                                                                Feature my listing: {formatExtrasPrice('featured')}
+                                                            </span>
                                                             <span className="block text-gray-600">Shown at the top of the homepage for more views.</span>
                                                         </span>
                                                     </label>
@@ -1585,7 +1668,9 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                                                 checked={metaBoostPackage === pkg.id}
                                                                                 onChange={() => setValue('metaBoostPackage', pkg.id, { shouldDirty: true })}
                                                                             />
-                                                                            <span className="font-medium text-gray-900">{pkg.priceEur ? extraPriceLabel(pkg.priceEur, user?.currency) : pkg.name}</span>
+                                                                            <span className="font-medium text-gray-900">
+                                                                                {pkg.id ? formatExtrasPrice(pkg.id) : pkg.name}
+                                                                            </span>
                                                                         </span>
                                                                         <span className="mt-1 text-xs text-gray-600">
                                                                             {pkg.reach ? <>{pkg.name}<br />Reach {pkg.reach}</> : 'Standard listing only'}
@@ -1654,8 +1739,8 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     ...(auctionType === 'reserve' ? [['Reserve', watch('reservePrice') ? `${currencySymbol}${Number(watch('reservePrice')).toLocaleString('en-IE')}` : '-']] : []),
                                                     ['Bid increment', watch('bidIncrement') ? `${currencySymbol}${Number(watch('bidIncrement')).toLocaleString('en-IE')}` : '-'],
                                                     ['VAT', watch('vatIncluded') ? 'Added on top of the winning bid' : 'Not applicable'],
-                                                    ['Featured', watch('featuredRequested') ? `Yes (${extraPriceLabel(FEATURED_FEE_EUR, user?.currency)})` : 'No'],
-                                                    ['Facebook & Instagram ad', selectedMetaPackage ? `${selectedMetaPackage.name} (${extraPriceLabel(selectedMetaPackage.priceEur, user?.currency)})` : 'No'],
+                                                    ['Featured', watch('featuredRequested') ? `Yes (${formatExtrasPrice('featured')})` : 'No'],
+                                                    ['Facebook & Instagram ad', selectedMetaPackage ? `${selectedMetaPackage.name} (${formatExtrasPrice(selectedMetaPackage.id)})` : 'No'],
                                                 ].map(([k, v]) => (
                                                     <div key={k} className="flex justify-between gap-4 border-b border-gray-100 pb-1.5">
                                                         <dt className="text-gray-500">{k}</dt>

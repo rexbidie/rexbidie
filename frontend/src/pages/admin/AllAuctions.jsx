@@ -40,6 +40,7 @@ function AllAuctions() {
 
     const { user } = useAuth();
     const userCurrency = user?.currency || 'EUR';
+    console.log(auctions)
 
     const [showManualSellModal, setShowManualSellModal] = useState(false);
     const [manualSellAuction, setManualSellAuction] = useState(null);

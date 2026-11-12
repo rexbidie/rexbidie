@@ -194,13 +194,16 @@ export const handleStripeWebhook = async (req, res) => {
         switch (event.type) {
             case "payment_intent.succeeded":
                 if (isSale) await recordPayment(pi);
+                else if (pi?.metadata?.type === 'listing_extras') await handleListingExtrasSuccess(pi);
                 else await handlePaymentSuccess(pi);
                 break;
             case "payment_intent.partially_funded":
                 if (isSale) await recordPartialFunding(pi);
                 break;
             case "payment_intent.payment_failed":
-                if (!isSale) await handlePaymentFailure(pi);
+                if (isSale) { /* nothing */ }
+                else if (pi?.metadata?.type === 'listing_extras') await handleListingExtrasFailure(pi);
+                else await handlePaymentFailure(pi);
                 break;
             default:
                 console.log(`Unhandled event type ${event.type}`);
@@ -282,6 +285,44 @@ async function handlePaymentFailure(paymentIntent) {
         console.log(`Payment failed for auction ${auctionId}`);
     } catch (error) {
         console.error("Error handling payment failure:", error);
+    }
+}
+
+async function handleListingExtrasSuccess(paymentIntent) {
+    try {
+        const auctionId = paymentIntent.metadata?.auctionId;
+        if (!auctionId) return;
+
+        const auction = await Auction.findById(auctionId);
+        if (!auction) return;
+
+        auction.extrasPayment.status = 'completed';
+        auction.extrasPayment.paidAt = new Date();
+
+        if (
+            (auction.auctionType === 'buy_now' || auction.auctionType === 'giveaway') &&
+            auction.status === 'draft'
+        ) {
+            auction.status = 'active';
+        }
+
+        await auction.save();
+        console.log(`✅ Listing extras paid for auction ${auctionId}`);
+    } catch (err) {
+        console.error('handleListingExtrasSuccess error:', err);
+    }
+}
+
+async function handleListingExtrasFailure(paymentIntent) {
+    try {
+        const auctionId = paymentIntent.metadata?.auctionId;
+        if (!auctionId) return;
+        await Auction.findByIdAndUpdate(auctionId, {
+            'extrasPayment.status': 'failed',
+        });
+        console.log(`❌ Listing extras payment failed for auction ${auctionId}`);
+    } catch (err) {
+        console.error('handleListingExtrasFailure error:', err);
     }
 }
 
@@ -981,5 +1022,105 @@ export const paySellerCommission = async (req, res) => {
             success: false,
             message: error.message || "Failed to process commission payment",
         });
+    }
+};
+
+/**
+ * @desc Confirm a listing-extras payment from the client (fallback for slow webhooks)
+ * @route POST /api/v1/payments/confirm-listing-extras
+ * @access Private (seller)
+ */
+export const confirmListingExtrasPayment = async (req, res) => {
+    try {
+        const { paymentIntentId, saveCard } = req.body;
+        const userId = req.user.id;
+
+        if (!paymentIntentId) {
+            return res
+                .status(400)
+                .json({ success: false, message: "paymentIntentId is required" });
+        }
+
+        const auction = await Auction.findOne({
+            "extrasPayment.paymentIntentId": paymentIntentId,
+            seller: userId,
+        });
+
+        if (!auction) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Listing payment not found" });
+        }
+
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+        if (paymentIntent.status !== "succeeded") {
+            return res.status(400).json({
+                success: false,
+                message: `Payment not yet succeeded (status: ${paymentIntent.status})`,
+            });
+        }
+
+        // ─── 1. Mark extras paid (idempotent — safe if webhook beat us) ───
+        if (auction.extrasPayment.status !== "completed") {
+            auction.extrasPayment.status = "completed";
+            auction.extrasPayment.paidAt = new Date();
+            if (
+                (auction.auctionType === "buy_now" ||
+                    auction.auctionType === "giveaway") &&
+                auction.status === "draft"
+            ) {
+                auction.status = "active";
+            }
+            await auction.save();
+        }
+
+        // ─── 2. Save the card to the seller's account (independent of #1) ───
+        if (saveCard && paymentIntent.payment_method) {
+            try {
+                const pm = await stripe.paymentMethods.retrieve(
+                    paymentIntent.payment_method
+                );
+
+                if (pm?.card) {
+                    const user = await User.findById(userId);
+                    if (user) {
+                        user.paymentMethodId = pm.id;
+                        user.cardLast4 = pm.card.last4;
+                        user.cardBrand = pm.card.brand;
+                        user.cardExpMonth = pm.card.exp_month;
+                        user.cardExpYear = pm.card.exp_year;
+                        user.isPaymentVerified = true;
+                        await user.save();
+
+                        if (user.stripeCustomerId) {
+                            await stripe.customers.update(user.stripeCustomerId, {
+                                invoice_settings: { default_payment_method: pm.id },
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                // Extras are already paid — don't fail the request just
+                // because we couldn't save the card. Seller can re-add
+                // via Billing.
+                console.error("Save-card after listing extras failed:", err);
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Payment confirmed",
+            data: {
+                auctionId: auction._id,
+                extrasPaid: true,
+                cardSaved: !!saveCard,
+            },
+        });
+    } catch (error) {
+        console.error("Confirm listing extras error:", error);
+        return res
+            .status(500)
+            .json({ success: false, message: "Internal server error" });
     }
 };

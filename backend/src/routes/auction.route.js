@@ -16,13 +16,15 @@ import {
     markAsFeatured,
     getHotListing,
     getFeaturedListings,
+    getListingExtrasPricing,
     participateInGiveaway,
     getGiveawayParticipants,
     selectGiveawayWinner,
     placeProxyBid,
     updateProxyBid,
     cancelProxyBid,
-    getProxyBidStatus
+    getProxyBidStatus,
+    retryExtrasPayment
 } from '../controllers/auction.controller.js';
 import upload from '../middlewares/multer.middleware.js';
 import { auth, authAdmin, authBidder, authSeller, optionalAuth } from '../middlewares/auth.middleware.js';
@@ -48,6 +50,8 @@ auctionRouter.get('/stats', auth, getBiddingStats);
 auctionRouter.get('/won-auctions', auth, getWonAuctions);
 auctionRouter.get('/sold-auctions', authSeller, getSoldAuctions);
 auctionRouter.get('/top', getTopLiveAuctions);
+auctionRouter.get('/extras/pricing', getListingExtrasPricing);
+auctionRouter.post("/:id/retry-extras-payment", authSeller, retryExtrasPayment);
 auctionRouter.post("/:id/proxy-bid", authBidder, placeProxyBid);
 auctionRouter.put("/:id/proxy-bid", authBidder, updateProxyBid);
 auctionRouter.delete("/:id/proxy-bid", authBidder, cancelProxyBid);

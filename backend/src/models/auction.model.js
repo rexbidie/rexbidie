@@ -352,6 +352,21 @@ const auctionSchema = new Schema(
       enum: ["", "boost", "plus", "max"],
       default: "",
     },
+    // ── Extras payment (charged upfront for Featured + Meta Boost) ──
+    extrasPayment: {
+      amount: { type: Number, default: 0 },
+      currency: { type: String, enum: ['EUR', 'GBP'], default: 'EUR' },
+      status: {
+        type: String,
+        enum: ['not_required', 'pending', 'completed', 'failed', 'refunded'],
+        default: 'not_required',
+      },
+      paymentIntentId: { type: String },
+      paidAt: { type: Date },
+      lineItems: [
+        { _id: false, id: String, label: String, amount: Number },
+      ],
+    },
     featuredPremiumAmount: {
       type: Number,
       default: 0,
