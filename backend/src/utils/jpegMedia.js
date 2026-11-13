@@ -68,6 +68,15 @@ const remember = (k, v) => {
     cache.set(k, v);
 };
 
+// Convert one photo at a time. Facebook and Instagram fetch many photos at
+// once, and converting them all together ran the server out of memory.
+let queue = Promise.resolve();
+const oneAtATime = (fn) => {
+    const run = queue.then(fn, fn);
+    queue = run.catch(() => {});
+    return run;
+};
+
 export async function jpegHandler(req, res) {
     const key = req.params[0];
     const instagram = req.query.fit === "instagram";
@@ -77,16 +86,22 @@ export async function jpegHandler(req, res) {
     let body = cache.get(cacheKey);
     if (!body) {
         try {
-            const upstream = await fetch(`${MEDIA_ORIGIN}/${key}`, { signal: AbortSignal.timeout(10_000) });
-            if (upstream.status === 404) return res.status(404).send("Not found");
-            if (!upstream.ok) return res.status(502).send("Image unavailable");
-            const type = upstream.headers.get("content-type") || "";
-            const length = Number(upstream.headers.get("content-length") || 0);
-            if (!type.startsWith("image/") || length > MAX_BYTES) return res.status(415).send("Not an image");
-            const buf = Buffer.from(await upstream.arrayBuffer());
-            if (buf.length > MAX_BYTES) return res.status(415).send("Too large");
-            body = await toJpeg(buf, { instagram });
-            remember(cacheKey, body);
+            body = await oneAtATime(async () => {
+                const cached = cache.get(cacheKey); // converted while this request waited
+                if (cached) return cached;
+                const upstream = await fetch(`${MEDIA_ORIGIN}/${key}`, { signal: AbortSignal.timeout(10_000) });
+                if (upstream.status === 404) return { status: 404, text: "Not found" };
+                if (!upstream.ok) return { status: 502, text: "Image unavailable" };
+                const type = upstream.headers.get("content-type") || "";
+                const length = Number(upstream.headers.get("content-length") || 0);
+                if (!type.startsWith("image/") || length > MAX_BYTES) return { status: 415, text: "Not an image" };
+                const buf = Buffer.from(await upstream.arrayBuffer());
+                if (buf.length > MAX_BYTES) return { status: 415, text: "Too large" };
+                const jpeg = await toJpeg(buf, { instagram });
+                remember(cacheKey, jpeg);
+                return jpeg;
+            });
+            if (!Buffer.isBuffer(body)) return res.status(body.status).send(body.text);
         } catch (err) {
             console.error("[jpegMedia]", err?.message);
             return res.status(502).send("Image unavailable");
