@@ -6,6 +6,8 @@ import {
     updateAuction,
     deleteAuction,
     placeBid,
+    buyLiveBuyNow,
+    liveBuyNowStatus,
     getUserAuctions,
     getBiddingStats,
     getWonAuctions,
@@ -45,6 +47,8 @@ auctionRouter.put('/update/:id', authSeller, upload.fields([
 ]), updateAuction);
 auctionRouter.delete('/delete/:id', authSeller, deleteAuction);
 auctionRouter.post('/bid/:id', authBidder, placeBid);
+auctionRouter.post('/:id/live-buy-now', authBidder, buyLiveBuyNow);
+auctionRouter.get('/:id/live-buy-now', liveBuyNowStatus);
 auctionRouter.get('/user/my-auctions', authSeller, getUserAuctions);
 auctionRouter.get('/stats', auth, getBiddingStats);
 auctionRouter.get('/won-auctions', auth, getWonAuctions);

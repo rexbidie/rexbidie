@@ -16,6 +16,7 @@ import { useSeo, buildAuctionSeo } from "../utils/seo";
 import { buyerFeeShort } from "../utils/fees";
 import { trackMeta } from "../utils/metaPixel";
 import PostAuctionBinPanel from "../components/buyItNow/PostAuctionBinPanel";
+import LiveBuyNowPanel from "../components/buyItNow/LiveBuyNowPanel";
 
 const YouTubeEmbed = lazy(() => import('../components/YouTubeEmbed'));
 const ImageLightBox = lazy(() => import('../components/ImageLightBox'));
@@ -953,6 +954,7 @@ function SingleAuction() {
 
                 {/* Buy It Now after the auction (mobile; desktop shows it in the bid panel) */}
                 <div className="lg:hidden">
+                    <LiveBuyNowPanel auction={auction} onPurchased={refreshAuction} />
                     <PostAuctionBinPanel auction={auction} onPurchased={refreshAuction} />
                 </div>
 
@@ -1514,6 +1516,7 @@ function SingleAuction() {
 
                             {/* Buy It Now after the auction (desktop) */}
                             <div className="hidden lg:block">
+                                <LiveBuyNowPanel auction={auction} onPurchased={refreshAuction} />
                                 <PostAuctionBinPanel auction={auction} onPurchased={refreshAuction} />
                             </div>
 

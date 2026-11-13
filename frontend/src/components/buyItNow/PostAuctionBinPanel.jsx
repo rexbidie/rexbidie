@@ -14,8 +14,10 @@ import BinManage from "./BinManage";
 // Buyers see the price, the time left and a Buy It Now button; the seller
 // (and RexBid staff) see the controls to start, schedule or lower it.
 
-const ConfirmModal = ({ open, onClose, info, auction, onBought }) => {
+// Also used for Buy It Now during the auction (LiveBuyNowPanel), with its own buyUrl.
+export const ConfirmModal = ({ open, onClose, info, auction, onBought, buyUrl }) => {
     useBodyScrollLock(open);
+    const navigate = useNavigate();
     const [agreed, setAgreed] = useState(false);
     const [buying, setBuying] = useState(false);
     if (!open) return null;
@@ -25,7 +27,7 @@ const ConfirmModal = ({ open, onClose, info, auction, onBought }) => {
     const buy = async () => {
         setBuying(true);
         try {
-            const { data } = await axiosInstance.post(`/api/v1/buy-it-now/lot/${auction._id}/buy`, {
+            const { data } = await axiosInstance.post(buyUrl || `/api/v1/buy-it-now/lot/${auction._id}/buy`, {
                 agreed: true,
                 expectedPriceInBase: info.priceInBase,
             });
@@ -33,6 +35,7 @@ const ConfirmModal = ({ open, onClose, info, auction, onBought }) => {
             onBought();
         } catch (err) {
             toast.error(err.response?.data?.message || "Could not complete the purchase", { duration: 8000 });
+            if (err.response?.data?.redirectTo) return navigate(err.response.data.redirectTo);
             onClose(true);
         } finally {
             setBuying(false);
