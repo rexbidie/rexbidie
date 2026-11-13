@@ -42,6 +42,14 @@ import { jpegHandler } from './utils/jpegMedia.js';
 import { adminSaleRouter, saleRouter } from "./routes/sale.route.js";
 import connectRouter from "./routes/connect.route.js";
 import { handleStripeWebhook } from "./controllers/payment.controller.js";
+import sharp from "sharp";
+
+// Keep image processing memory low on the small Render instance: sharp's
+// default cache keeps up to 50MB of decoded images and it uses one thread per
+// CPU. Neither helps here (each photo is processed once) and both add to the
+// memory peaks that can restart the server.
+sharp.cache(false);
+sharp.concurrency(1);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -113,7 +121,10 @@ app.set('trust proxy', 1);
 app.get('/api/v1/health', (req, res) => {
     res.status(200).json({
         status: 'ok',
-        agenda: agendaStarted ? 'running' : 'failed'
+        agenda: agendaStarted ? 'running' : 'failed',
+        // Uptime resets when Render restarts the server, which shows up crashes.
+        uptimeMinutes: Math.round(process.uptime() / 60),
+        memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     });
 });
 
