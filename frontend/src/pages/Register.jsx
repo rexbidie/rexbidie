@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isNativeApp } from '../native/platform';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, User, Phone, ChevronDown, Gavel, Store, Handshake, Banknote, Building2, FileText, Upload, X, AlertCircle } from 'lucide-react';
@@ -274,7 +275,7 @@ const Register = () => {
                 toast.error(data.message || 'Registration failed');
             }
         } catch (error) {
-            toast.dismiss(loadingToastId);
+            // (loading toast is no longer shown)
             toast.error(error?.response?.data?.message || 'Completion failed');
         } finally {
             setIsLoading(false);
@@ -380,11 +381,19 @@ const Register = () => {
                         confirmParams: {
                             return_url: returnUrl,
                         },
+                        // App: show the bank's check in a pop-up instead of leaving the app.
+                        ...(isNativeApp ? { redirect: 'if_required' } : {}),
                     });
 
                     if (result.error) {
                         toast.error(result.error.message);
                         setIsLoading(false);
+                        return;
+                    }
+
+                    if (isNativeApp && result.setupIntent?.status === 'succeeded') {
+                        await completeRegistration(data.registrationToken, result.setupIntent.id);
+                        sessionStorage.removeItem('registrationToken');
                         return;
                     }
 

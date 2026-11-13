@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, Building, User } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Mail, Lock, Eye, EyeOff, Building, User, Fingerprint, ScanFace } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { darkLogo } from '../assets';
 import { ForgotPasswordModal } from '../components';
@@ -8,6 +8,15 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+    biometricInfo,
+    declineBiometric,
+    enableBiometric,
+    getBiometricCredentials,
+    savedBiometricEmail,
+    shouldOfferBiometric,
+} from '../native/biometric';
+import * as haptics from '../native/haptics';
 
 const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
@@ -15,12 +24,65 @@ const Login = () => {
     const [showForgotPasswordModel, setShowForgotPasswordModal] = useState(false);
     const navigate = useNavigate();
     const { login, user } = useAuth();
+    // App only: Face ID / fingerprint sign-in.
+    const [bio, setBio] = useState({ available: false, label: '' });
+    const [bioEmail, setBioEmail] = useState(null);
+    const [offer, setOffer] = useState(null); // { email, password, userType } while asking
+    const holdRedirect = useRef(false);
 
     useEffect(() => {
-        if (user && user?.userType) {
+        biometricInfo().then(setBio);
+        setBioEmail(savedBiometricEmail());
+    }, []);
+
+    useEffect(() => {
+        if (user && user?.userType && !holdRedirect.current) {
             navigate(`/${user.userType}/dashboard`);
         }
     }, [user])
+
+    const finishOffer = async (accept) => {
+        const current = offer;
+        setOffer(null);
+        holdRedirect.current = false;
+        if (!current) return;
+        if (accept) {
+            try {
+                await enableBiometric(current.email, current.password);
+                toast.success(`${bio.label} sign-in is on`);
+            } catch {
+                toast.error(`Could not turn on ${bio.label}`);
+            }
+        } else {
+            declineBiometric(current.email);
+        }
+        navigate(`/${current.userType}/dashboard`);
+    };
+
+    const biometricLogin = async () => {
+        let creds;
+        try {
+            creds = await getBiometricCredentials();
+        } catch {
+            setBioEmail(savedBiometricEmail());
+            return; // cancelled, or the saved sign-in was cleared
+        }
+        setIsLoading(true);
+        try {
+            const data = await login({ email: creds.email, password: creds.password });
+            if (data?.success) {
+                haptics.bidPlaced();
+                toast.success(data.message);
+                navigate(`/${data.userType}/dashboard`);
+            } else {
+                // e.g. the password was changed on the website. Signing in with
+                // the password once updates what is saved on this phone.
+                toast.error('Please sign in with your password this time');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const { register, handleSubmit } = useForm({
         defaultValues: {
@@ -39,10 +101,21 @@ const Login = () => {
                 email: loginData.email.toLowerCase().trim()
             };
 
+            const offerBio = bio.available && shouldOfferBiometric(normalizedLoginData.email);
+            if (offerBio) holdRedirect.current = true;
             const data = await login(normalizedLoginData);
 
             if (data && data.success) {
                 toast.success(data.message);
+
+                if (offerBio) {
+                    setOffer({ email: normalizedLoginData.email, password: loginData.password, userType: data.userType });
+                    return;
+                }
+                // Keep the saved Face ID / fingerprint sign-in up to date if the password changed.
+                if (bioEmail && bioEmail === normalizedLoginData.email) {
+                    enableBiometric(normalizedLoginData.email, loginData.password).catch(() => {});
+                }
 
                 gtag('event', 'login', {
                     method: 'email',
@@ -51,7 +124,9 @@ const Login = () => {
 
                 navigate(`/${data.userType}/dashboard`);
             }
+            holdRedirect.current = false;
         } catch (error) {
+            holdRedirect.current = false;
             toast.error(error?.response?.data?.message);
             console.log(error);
         } finally {
@@ -62,6 +137,23 @@ const Login = () => {
     return (
         <div className="min-h-screen pt-32 pb-16 bg-orange-50 flex items-center justify-center p-4">
             <ForgotPasswordModal isOpen={showForgotPasswordModel} onClose={() => setShowForgotPasswordModal(false)} />
+            {offer && (
+                <div className="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center">
+                        {bio.label === 'Face ID' ? <ScanFace className="mx-auto text-primary" size={44} /> : <Fingerprint className="mx-auto text-primary" size={44} />}
+                        <h2 className="text-lg font-bold text-secondary mt-3">Sign in faster next time?</h2>
+                        <p className="text-gray-600 text-sm mt-2">
+                            Use {bio.label} instead of typing your password. Your password stays locked on this phone and is never shared.
+                        </p>
+                        <button type="button" onClick={() => finishOffer(true)} className="mt-5 w-full py-3 rounded-lg bg-primary text-white font-semibold">
+                            Use {bio.label}
+                        </button>
+                        <button type="button" onClick={() => finishOffer(false)} className="mt-2 w-full py-3 rounded-lg text-secondary font-medium">
+                            Not now
+                        </button>
+                    </div>
+                </div>
+            )}
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                 {/* Header */}
                 <div className="pt-8 text-center flex flex-col items-center justify-center gap-3">
@@ -71,6 +163,23 @@ const Login = () => {
 
                 {/* Login Form */}
                 <div className="p-5 sm:p-8">
+                    {bio.available && bioEmail && (
+                        <div className="mb-6">
+                            <button
+                                type="button"
+                                onClick={biometricLogin}
+                                disabled={isLoading}
+                                className="w-full flex items-center justify-center gap-2 bg-secondary text-white py-3 px-4 rounded-lg font-semibold disabled:opacity-50"
+                            >
+                                {bio.label === 'Face ID' ? <ScanFace size={22} /> : <Fingerprint size={22} />}
+                                Sign in with {bio.label}
+                            </button>
+                            <p className="text-center text-xs text-gray-500 mt-2">{bioEmail}</p>
+                            <div className="flex items-center gap-3 mt-5 text-xs text-gray-400">
+                                <span className="flex-1 border-t" /> or use your password <span className="flex-1 border-t" />
+                            </div>
+                        </div>
+                    )}
                     <form onSubmit={handleSubmit(loginHandler)} className="space-y-6">
                         {/* Email Field */}
                         <div>

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { CheckCircle, AlertTriangle, Landmark, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import axiosInstance from "../../utils/axiosInstance";
+import { isNativeApp } from "../../native/platform";
 
 /**
  * Seller payouts are paid to a Stripe Express account. This card shows its
@@ -31,12 +32,25 @@ function StripePayoutCard() {
         setBusy(true);
         try {
             const { data } = await axiosInstance.post(`/api/v1/stripe-connect/${kind}`);
+            if (isNativeApp) {
+                // In the app, Stripe opens in an in-app browser sheet. When the
+                // seller closes it, refresh the payout status here.
+                const { Browser } = await import("@capacitor/browser");
+                const handle = await Browser.addListener("browserFinished", async () => {
+                    handle.remove();
+                    const s = await load();
+                    if (s?.state === "ready") toast.success("Your payout account is ready");
+                    setBusy(false);
+                });
+                await Browser.open({ url: data.data.url, presentationStyle: "fullscreen", toolbarColor: "#072342" });
+                return;
+            }
             window.location.href = data.data.url;
         } catch (err) {
             toast.error(err.response?.data?.message || "Could not open Stripe. Please try again.");
             setBusy(false);
         }
-    }, []);
+    }, [load]);
 
     useEffect(() => {
         const flag = params.get("stripe");

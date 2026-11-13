@@ -3,6 +3,7 @@ import { Loader, Gauge, X } from "lucide-react";
 import axiosInstance from "../utils/axiosInstance";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
+import * as haptics from "../native/haptics";
 
 const ProxyBidSection = ({ auction, userCurrency, onClose, onPaymentRequired, initialMaxAmount }) => {
     const { user } = useAuth();
@@ -62,6 +63,7 @@ const ProxyBidSection = ({ auction, userCurrency, onClose, onPaymentRequired, in
                 currency: userCurrency,
             });
             toast.success("Proxy bid placed");
+            haptics.bidPlaced();
             await fetchStatus();
             setMaxAmount("");
             onClose?.();

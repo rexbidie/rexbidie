@@ -1,4 +1,4 @@
-import { CalendarDays, CheckSquare, Clock, Download, File, Fuel, Gauge, Gavel, Heart, Loader, MapPin, MessageCircle, PaintBucket, Plane, ShieldCheck, Tag, User, Users, Weight, Zap, Banknote, MessageSquare, Mail, Phone, Star, CreditCard, Info, Bell, Truck, Stars } from "lucide-react";
+import { CalendarDays, CheckSquare, Clock, Download, File, Fuel, Gauge, Gavel, Heart, Loader, MapPin, MessageCircle, PaintBucket, Plane, ShieldCheck, Tag, User, Users, Weight, Zap, Banknote, MessageSquare, Mail, Phone, Star, CreditCard, Info, Bell, Truck, Stars, Share2 } from "lucide-react";
 import { AuthBidModal, BidConfirmationModal, BuyNowModal, Container, GiveawayClaimModal, LoadingSpinner, MobileBidBottomBar, MobileBidStickyBar, ProxyBidSection, RatingStars, ReminderModal, ReviewModal, SellerStatsCard, SpecificationsSection, TabSection, TimerDisplay, WatchlistButton } from "../components";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { lazy, Suspense, useRef, useState, useEffect } from "react";
@@ -17,6 +17,9 @@ import { buyerFeeShort } from "../utils/fees";
 import { trackMeta } from "../utils/metaPixel";
 import PostAuctionBinPanel from "../components/buyItNow/PostAuctionBinPanel";
 import LiveBuyNowPanel from "../components/buyItNow/LiveBuyNowPanel";
+import { isNativeApp } from "../native/platform";
+import * as haptics from "../native/haptics";
+import { shareLink } from "../native/share";
 
 const YouTubeEmbed = lazy(() => import('../components/YouTubeEmbed'));
 const ImageLightBox = lazy(() => import('../components/ImageLightBox'));
@@ -273,6 +276,16 @@ function SingleAuction() {
         return "outbid";
     })();
 
+    // App: buzz and tell the bidder straight away when someone outbids them.
+    const prevBidStatus = useRef(null);
+    useEffect(() => {
+        if (isNativeApp && prevBidStatus.current === "highest" && userBidStatus === "outbid") {
+            haptics.outbid();
+            toast.error("You've been outbid", { icon: "⚠️", duration: 4000 });
+        }
+        prevBidStatus.current = userBidStatus;
+    }, [userBidStatus]);
+
     useEffect(() => {
         const fetchAuction = async () => {
             try {
@@ -526,6 +539,7 @@ function SingleAuction() {
                 setAuction(data.data.auction);
                 setBidAmount('');
                 toast.success('Bid placed successfully!');
+                haptics.bidPlaced();
 
                 // place_bid — fires only after the backend confirms the bid was accepted
                 gtag('event', 'place_bid', {
@@ -914,6 +928,16 @@ function SingleAuction() {
 
                 <div className="flex items-center gap-3 mt-4 mb-6 flex-wrap">
                     <h2 className="text-2xl md:text-3xl font-semibold text-primary">{auction.title}</h2>
+                    {isNativeApp && (
+                        <button
+                            type="button"
+                            onClick={() => shareLink({ title: auction.title, text: `${auction.title} on RexBid`, path: `/auction/${auction._id}` })}
+                            className="ml-auto inline-flex items-center gap-1.5 py-1.5 px-3 border border-gray-200 rounded-full text-secondary"
+                            aria-label="Share this listing"
+                        >
+                            <Share2 size={18} /> Share
+                        </button>
+                    )}
                     {/* {auctionReviews.length > 0 && (
                         <div className="flex items-center gap-1 bg-orange-100 px-3 py-1 rounded-full">
                             <RatingStars rating={auctionReviews.reduce((sum, r) => sum + r.rating, 0) / auctionReviews.length} size={16} />

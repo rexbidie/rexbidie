@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { getGaClientId } from '../utils/ga.js';
 import { syncMetaUser } from '../utils/metaPixel.js';
+import { unregisterPush } from '../native/push';
 
 const AuthContext = createContext();
 
@@ -87,6 +88,8 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        // App: stop this phone getting the signed-out user's notifications.
+        unregisterPush(localStorage.getItem('accessToken'));
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
