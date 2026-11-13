@@ -7,6 +7,7 @@ import {
     deleteAuction,
     placeBid,
     buyLiveBuyNow,
+    submitListingWithoutExtras,
     liveBuyNowStatus,
     getUserAuctions,
     getBiddingStats,
@@ -56,6 +57,7 @@ auctionRouter.get('/sold-auctions', authSeller, getSoldAuctions);
 auctionRouter.get('/top', getTopLiveAuctions);
 auctionRouter.get('/extras/pricing', getListingExtrasPricing);
 auctionRouter.post("/:id/retry-extras-payment", authSeller, retryExtrasPayment);
+auctionRouter.post("/:id/submit-without-extras", authSeller, submitListingWithoutExtras);
 auctionRouter.post("/:id/proxy-bid", authBidder, placeProxyBid);
 auctionRouter.put("/:id/proxy-bid", authBidder, updateProxyBid);
 auctionRouter.delete("/:id/proxy-bid", authBidder, cancelProxyBid);

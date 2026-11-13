@@ -450,6 +450,8 @@ class AgendaService {
     // Creates a Sale record for every newly sold lot and keeps paid status in step.
     this.agenda.define("sync sales", async () => {
       try {
+        const { moveUnpaidExtrasDrafts } = await import("./listingExtrasService.js");
+        await moveUnpaidExtrasDrafts().catch((e) => console.error("Unpaid extras check failed:", e?.message));
         const { created, markedPaid, ibansAdded } = await syncSales({ ibanLimit: 50 });
         if (created || markedPaid || ibansAdded) {
           console.log(`Sales sync: ${created} created, ${markedPaid} marked paid, ${ibansAdded} IBANs added`);

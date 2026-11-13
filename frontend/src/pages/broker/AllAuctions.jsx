@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import BinDashboardModal from "../../components/buyItNow/BinDashboardModal";
 import { LoadingSpinner, LowerReserveModal, BrokerContainer, BrokerHeader, BrokerSidebar } from "../../components";
-import { Gavel, Eye, Award, BarChart3, TrendingUp, DollarSign, Clock, Search, Filter, SortAsc, Users, MoreVertical, Loader } from "lucide-react";
+import { Gavel, Eye, Award, BarChart3, TrendingUp, DollarSign, Clock, Search, Filter, SortAsc, Users, MoreVertical, Loader, CreditCard } from "lucide-react";
+import ListingExtrasPaymentModal from "../../components/listing/ListingExtrasPaymentModal";
 import axiosInstance from "../../utils/axiosInstance";
 import { Link } from "react-router-dom";
 import { useRef } from "react";
@@ -29,6 +30,8 @@ function AllAuctions() {
     const [binAuction, setBinAuction] = useState(null);
     const [lowerReserveCurrentAuction, setLowerReserveCurrentAuction] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const [extrasPayment, setExtrasPayment] = useState(null);
+    const [pendingAuctionId, setPendingAuctionId] = useState(null);
 
     const handleReserveLowered = (updatedAuction) => {
         // Update your local state with the new auction data
@@ -201,12 +204,41 @@ function AllAuctions() {
             }
         });
 
+    // Unpaid Featured / Meta Boost: pay now, or drop them and submit without.
+    const handleRetryExtrasPayment = async (auction) => {
+        try {
+            const { data } = await axiosInstance.post(`/api/v1/auctions/${auction._id}/retry-extras-payment`);
+            if (data.success) {
+                setExtrasPayment(data.data);
+                setPendingAuctionId(auction._id);
+                setActiveDropdown(null);
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to start payment");
+        }
+    };
+
+    const handleSubmitWithoutExtras = async (auction) => {
+        setActiveDropdown(null);
+        if (!window.confirm("Submit this listing without Featured / Meta Boost? You won't be charged for them.")) return;
+        try {
+            const { data } = await axiosInstance.post(`/api/v1/auctions/${auction._id}/submit-without-extras`);
+            alert(data.message);
+            fetchAuctions();
+        } catch (err) {
+            alert(err.response?.data?.message || "Could not submit the listing");
+        }
+    };
+
     // Helper functions
     const getStatusBadge = (auction) => {
         const now = new Date();
         const end = new Date(auction.endDate);
         const diffHours = (end - now) / (1000 * 60 * 60);
 
+        if (auction.status === 'awaiting_payment') {
+            return { class: "bg-orange-100 text-orange-800", text: "Awaiting payment" };
+        }
         if (diffHours < 24 && diffHours > 0) {
             return { class: "bg-amber-100 text-amber-800", text: "Ending Soon" };
         } else if (diffHours <= 0) {
@@ -260,6 +292,14 @@ function AllAuctions() {
 
             <div className="w-full relative">
                 <BrokerHeader />
+
+                <ListingExtrasPaymentModal
+                    isOpen={!!extrasPayment}
+                    onClose={() => { setExtrasPayment(null); setPendingAuctionId(null); }}
+                    payment={extrasPayment}
+                    auctionId={pendingAuctionId}
+                    onSuccess={() => { fetchAuctions(); setExtrasPayment(null); setPendingAuctionId(null); }}
+                />
                 <LowerReserveModal />
 
                 <BrokerContainer>
@@ -464,6 +504,23 @@ function AllAuctions() {
                                                             {activeDropdown === auction._id && (
                                                                 <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 shadow-lg py-2 z-50 rounded-md min-w-[180px]">
                                                                     <div className="flex flex-col">
+                                                                        {auction.status === "awaiting_payment" && auction.extrasPayment?.amount > 0 && auction.extrasPayment?.status !== "completed" && (
+                                                                            <>
+                                                                                <button
+                                                                                    onClick={() => handleRetryExtrasPayment(auction)}
+                                                                                    className="px-4 py-2 text-orange-600 hover:bg-orange-50 transition-colors text-left"
+                                                                                >
+                                                                                    <CreditCard size={16} className="inline mr-2" />
+                                                                                    Complete Payment ({auction.extrasPayment.currency === "GBP" ? "£" : "€"}{auction.extrasPayment.amount})
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => handleSubmitWithoutExtras(auction)}
+                                                                                    className="px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                                                                                >
+                                                                                    Submit without extras
+                                                                                </button>
+                                                                            </>
+                                                                        )}
                                                                         <Link
                                                                             to={`/auction/${auction._id}`}
                                                                             target="_blank"

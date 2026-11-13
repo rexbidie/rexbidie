@@ -140,6 +140,15 @@ const Register = () => {
         }
     });
 
+    // Browsers sometimes autofill the saved email into Username. A username
+    // can't contain "@", so clear it and let the person choose one.
+    const usernameValue = watch('username');
+    useEffect(() => {
+        if (typeof usernameValue === 'string' && usernameValue.includes('@')) {
+            setValue('username', '', { shouldValidate: false });
+        }
+    }, [usernameValue, setValue]);
+
     const password = watch('password');
 
     const handleUserTypeChange = (type) => {
@@ -492,6 +501,7 @@ const Register = () => {
                                             </div>
                                             <input
                                                 type="email"
+                                                autoComplete="email"
                                                 {...register('email', {
                                                     required: 'Email is required',
                                                     pattern: {
@@ -546,6 +556,7 @@ const Register = () => {
                                             </div>
                                             <input
                                                 type={showPassword ? 'text' : 'password'}
+                                                autoComplete="new-password"
                                                 {...register('password', {
                                                     required: 'Password is required',
                                                     minLength: { value: 6, message: 'Password must be at least 6 characters' }
@@ -580,6 +591,7 @@ const Register = () => {
                                             </div>
                                             <input
                                                 type={showConfirmPassword ? 'text' : 'password'}
+                                                autoComplete="new-password"
                                                 {...register('confirmPassword', {
                                                     required: 'Please confirm your password',
                                                     validate: value => value === password || 'Passwords do not match'
@@ -781,6 +793,14 @@ const Register = () => {
                                             </div>
                                             <input
                                                 type="text"
+                                                // Not a login field: stops browsers and password managers
+                                                // filling the saved email in here.
+                                                autoComplete="nickname"
+                                                autoCapitalize="none"
+                                                spellCheck={false}
+                                                data-lpignore="true"
+                                                data-1p-ignore="true"
+                                                data-bwignore="true"
                                                 {...register('username', {
                                                     required: 'Username is required',
                                                     minLength: { value: 3, message: 'Username must be at least 3 characters' },
@@ -789,6 +809,10 @@ const Register = () => {
                                                         message: 'Username can only contain letters, numbers, and underscores'
                                                     }
                                                 })}
+                                                onFocus={(e) => {
+                                                    // An email filled in by the browser: clear it so they choose a username.
+                                                    if (e.target.value.includes('@')) setValue('username', '', { shouldValidate: false });
+                                                }}
                                                 className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-bg-primary-light bg-bg-secondary dark:bg-bg-primary text-text-primary dark:text-text-primary-dark rounded-lg focus:ring-2 focus:ring-secondary-darktext-bg-secondary-dark dark:focus:ring-gray-500 focus:border-transparent"
                                                 placeholder="Choose a username"
                                             />

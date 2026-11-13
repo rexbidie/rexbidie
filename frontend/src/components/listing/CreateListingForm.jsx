@@ -977,13 +977,13 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             if (data && data.success) {
                 if (data.data?.paymentSetupFailed) {
                     toast(
-                        "Your listing is saved, but payment for the extras couldn't be started. Please pay from All Auctions in your dashboard.",
+                        "Your listing is saved but NOT submitted, because payment for the extras couldn't be started. Pay or remove the extras from All Auctions in your dashboard.",
                         { duration: 10000 }
                     );
                 } else {
                     toast.success(
                         data.data?.payment
-                            ? "Auction created — complete payment below to submit for review."
+                            ? "Listing saved. Complete payment below to submit it for review."
                             : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
                         { duration: 8000 }
                     );
@@ -1083,8 +1083,8 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                     onClose={() => {
                         // Seller abandoned payment — draft stays in their account, admin sees it unpaid
                         toast(
-                            "Your listing was saved as a draft. You can complete payment later from all auctions page in your dashboard.",
-                            { duration: 6000 }
+                            "Your listing is saved but NOT submitted. It will only be sent for approval once the Featured / Meta Boost payment is made. Pay or remove the extras from All Auctions in your dashboard.",
+                            { duration: 12000 }
                         );
                         finishAuctionCreation();
                     }}
