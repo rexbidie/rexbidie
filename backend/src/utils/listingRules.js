@@ -39,3 +39,46 @@ export const minimumPriceError = ({ auctionType, startPrice, reservePrice, curre
     }
     return null;
 };
+
+// Minimum bid increments (Nov 2026), set by the current bid (the start price
+// before the first bid). Same numbers in € and £. The increment on a lot is
+// never below the minimum for its current bid: it rises automatically as
+// bidding moves into a higher band. Sellers can lower it down to the minimum
+// at any time, and raise it only before the first bid.
+export const INCREMENT_BANDS = [
+    { below: 1000, min: 25 },
+    { below: 5000, min: 50 },
+    { below: 15000, min: 100 },
+    { below: 30000, min: 150 },
+    { below: 60000, min: 250 },
+    { below: 100000, min: 500 },
+    { below: Infinity, min: 1000 },
+];
+
+/** Minimum increment for a current bid (or start price). */
+export const minIncrementFor = (price) => {
+    const p = Number(price) || 0;
+    return INCREMENT_BANDS.find((b) => p < b.below).min;
+};
+
+/** The price the minimum is based on: current bid once bidding starts, else the start price. */
+export const incrementBasis = (auction) =>
+    Number(auction?.bidCount) > 0 ? Number(auction.currentPrice) || 0 : Number(auction?.startPrice) || 0;
+
+/**
+ * Error message for a seller changing the increment, or null.
+ * @param {object} auction  bidCount, currentPrice, startPrice, bidIncrement, baseCurrency
+ */
+export const incrementChangeError = (auction, newIncrement) => {
+    const inc = Number(newIncrement);
+    if (!Number.isFinite(inc) || inc <= 0 || Math.round(inc) !== inc) return "Enter the increment as a whole amount.";
+    const sym = SYMBOL[auction?.baseCurrency] || "€";
+    const min = minIncrementFor(incrementBasis(auction));
+    if (inc < min) {
+        return `The minimum increment at ${Number(auction.bidCount) > 0 ? "the current bid" : "this start price"} is ${sym}${min.toLocaleString("en-IE")}.`;
+    }
+    if (Number(auction?.bidCount) > 0 && inc > Number(auction.bidIncrement)) {
+        return "The increment can't be raised once bidding has started. You can lower it.";
+    }
+    return null;
+};

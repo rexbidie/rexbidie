@@ -27,12 +27,17 @@ import {
     manualSellAuction
 } from '../controllers/admin.controller.js';
 import { authAdmin } from '../middlewares/auth.middleware.js';
+import { pendingEdits, approve as approveListingEdit, reject as rejectListingEdit } from '../controllers/listingEdit.controller.js';
 import upload from '../middlewares/multer.middleware.js';
 import { getAdminTransactions, getTransactionStats } from '../controllers/transaction.controller.js';
 
 const AdminRouter = Router();
 
 AdminRouter.get('/stats', authAdmin, getAdminStats);
+// Edits to live listings waiting for approval
+AdminRouter.get('/listing-edits', authAdmin, pendingEdits);
+AdminRouter.post('/listing-edits/:id/approve', authAdmin, approveListingEdit);
+AdminRouter.post('/listing-edits/:id/reject', authAdmin, rejectListingEdit);
 AdminRouter.get('/users', authAdmin, getAllUsers);
 AdminRouter.get('/users/:userId', authAdmin, getUserDetails);
 AdminRouter.patch('/users/:userId/status', authAdmin, updateUserStatus);

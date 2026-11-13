@@ -74,6 +74,11 @@ const navigation = [
         icon: <Gavel size={20} />
     },
     {
+        name: 'Edits to approve',
+        path: '/admin/auctions/edits',
+        icon: <FileText size={20} />
+    },
+    {
         name: 'Sales',
         path: '/admin/sales',
         icon: <FileText size={20} />

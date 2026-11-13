@@ -32,8 +32,11 @@ import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
 import { minimumPriceError } from "../utils/listingRules.js";
 import { calculateListingExtras } from "../utils/listingExtras.js";
 import { livePriceError, liveBuyNowState } from "../utils/liveBuyNow.js";
+import { minIncrementFor, incrementChangeError, incrementBasis } from "../utils/listingRules.js";
 import { buyLive } from "../services/liveBuyNowService.js";
 import { submitWithoutExtras } from "../services/listingExtrasService.js";
+import { confirmPromotion, promotionOptions, startPromotion } from "../services/listingPromotionService.js";
+import { HOLD_EDIT_STATUSES, holdEditForApproval, changedFields, fileIds, deleteFiles, notifyAdminsOfResubmission, discardEdit } from "../services/listingEditService.js";
 import { getExtrasPricingMenu } from "../utils/listingExtras.js";
 
 // Initialize Stripe with your secret key
@@ -489,6 +492,14 @@ export const createAuction = async (req, res) => {
       parseFloat(bidIncrement) > 0
     ) {
       auctionData.bidIncrement = parseFloat(bidIncrement);
+    }
+
+    // Minimum bid increment for the start price (utils/listingRules.js).
+    if ((auctionType === "standard" || auctionType === "reserve") && auctionData.bidIncrement) {
+      const minInc = minIncrementFor(auctionData.startPrice);
+      if (auctionData.bidIncrement < minInc) {
+        return res.status(400).json({ success: false, message: `The minimum bid increment for this start price is ${minInc}.` });
+      }
     }
 
     // ── Buy It Now during the auction (reserve lots only) ──
@@ -1530,6 +1541,10 @@ export const updateAuction = async (req, res) => {
       }
     }
 
+    // Files the edit removes: deleted once the edit is applied (straight away,
+    // or when RexBid approves an edit to a live listing).
+    const filesToDelete = [];
+
     // Handle removed photos
     let finalPhotos = [...auction.photos];
     if (removedPhotos) {
@@ -1550,8 +1565,8 @@ export const updateAuction = async (req, res) => {
             if (photoIndex > -1) {
               const removedPhoto = finalPhotos[photoIndex];
               // Delete from Cloudinary
-              if (removedPhoto?.publicId) await deleteFromCloudinary(removedPhoto.publicId);
-              if (removedPhoto?.thumbPublicId) await deleteFromCloudinary(removedPhoto.thumbPublicId);
+              if (removedPhoto?.publicId) filesToDelete.push(removedPhoto.publicId);
+              if (removedPhoto?.thumbPublicId) filesToDelete.push(removedPhoto.thumbPublicId);
               finalPhotos.splice(photoIndex, 1);
             }
           }
@@ -1579,9 +1594,7 @@ export const updateAuction = async (req, res) => {
             if (docIndex > -1) {
               const removedDoc = finalDocuments[docIndex];
               // Delete from Cloudinary
-              if (removedDoc.publicId) {
-                await deleteFromCloudinary(removedDoc.publicId);
-              }
+              if (removedDoc.publicId) filesToDelete.push(removedDoc.publicId);
               finalDocuments.splice(docIndex, 1);
             }
           }
@@ -1611,8 +1624,8 @@ export const updateAuction = async (req, res) => {
             if (recordIndex > -1) {
               const removedRecord = finalServiceRecords[recordIndex];
               // Delete from Cloudinary
-              if (removedRecord?.publicId) await deleteFromCloudinary(removedRecord.publicId);
-              if (removedRecord?.thumbPublicId) await deleteFromCloudinary(removedRecord.thumbPublicId);
+              if (removedRecord?.publicId) filesToDelete.push(removedRecord.publicId);
+              if (removedRecord?.thumbPublicId) filesToDelete.push(removedRecord.thumbPublicId);
               finalServiceRecords.splice(recordIndex, 1);
             }
           }
@@ -2058,10 +2071,51 @@ export const updateAuction = async (req, res) => {
     }
     if (isEndedAuction) updateData["liveBuyNow.status"] = null;
 
+    // Minimum bid increment for the start price (utils/listingRules.js).
+    if ((auctionType === "standard" || auctionType === "reserve") && updateData.bidIncrement) {
+      const minInc = minIncrementFor(incrementBasis({ ...auction.toObject(), startPrice: updateData.startPrice }));
+      if (updateData.bidIncrement < minInc && updateData.bidIncrement !== auction.bidIncrement) {
+        return res.status(400).json({ success: false, message: `The minimum bid increment here is ${minInc}.` });
+      }
+    }
+
+    // Files this edit uploaded (cleaned up if the edit is never applied).
+    const knownFiles = new Set(fileIds([...(auction.photos || []), ...(auction.documents || []), ...(auction.serviceRecords || [])]));
+    const newFiles = fileIds([...(updateData.photos || []), ...(updateData.documents || []), ...(updateData.serviceRecords || [])])
+      .filter((fid) => !knownFiles.has(fid));
+
+    // ── Live (or approved) listing: it stays up as it is; the edit waits for approval ──
+    if (HOLD_EDIT_STATUSES.includes(auction.status)) {
+      const { status: _ignored, ...editData } = updateData;
+      let changed;
+      try {
+        ({ changed } = await holdEditForApproval(auction, editData, { filesToDelete, newFiles }));
+      } catch (holdErr) {
+        if (holdErr?.status) return res.status(holdErr.status).json({ success: false, message: holdErr.message });
+        throw holdErr;
+      }
+      if (!changed.length) {
+        return res.status(200).json({ success: true, message: "No changes to submit.", data: { auction } });
+      }
+      return res.status(200).json({
+        success: true,
+        pendingApproval: true,
+        message: "Changes submitted for approval. Your listing stays live with its current details until RexBid approves them (usually within 12 hours).",
+        data: { auction },
+      });
+    }
+
+    const changedBeforeUpdate = changedFields(auction, updateData);
+
     const updatedAuction = await Auction.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
     }).populate("seller", "username companyName firstName lastName");
+
+    await deleteFiles(filesToDelete);
+    if (updatedAuction.status === "draft" && changedBeforeUpdate.length) {
+      notifyAdminsOfResubmission(updatedAuction, changedBeforeUpdate);
+    }
 
     // ========== RESCHEDULE JOBS ==========
     if (
@@ -2422,6 +2476,8 @@ export const placeBidDirect = async (
             proxyBidId,
           },
         },
+        // The increment never drops below the minimum for the current bid.
+        $max: { bidIncrement: minIncrementFor(amount) },
       };
 
       const arrayFilters = [];
@@ -3909,12 +3965,11 @@ export const markAsFeatured = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Auction cannot be featured in its current state' });
     }
 
-    if (auction.isFeatured) {
-      return res.status(400).json({ success: false, message: 'Auction is already featured' });
-    }
-
-    auction.isFeatured = true;
-    await auction.save();
+    // Featuring is paid now: the 3-dot menu's "Feature this ad" (POST /:id/promote).
+    return res.status(410).json({
+      success: false,
+      message: 'Featuring is now a paid option. Use "Feature this ad" in the listing menu.',
+    });
 
     res.status(200).json({
       success: true,
@@ -4551,4 +4606,106 @@ export const submitListingWithoutExtras = async (req, res) => {
     if (!error?.status) console.error("Submit without extras error:", error);
     res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Internal server error" });
   }
+};
+
+/**
+ * @desc    Change the bid increment (lower any time down to the minimum for the
+ *          current bid; raise only before the first bid). No approval needed.
+ * @route   PATCH /api/v1/auctions/:id/increment
+ * @access  Private (seller)
+ */
+export const changeBidIncrement = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
+    if (auction.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+    if (!["standard", "reserve"].includes(auction.auctionType)) {
+      return res.status(400).json({ success: false, message: "Only auctions have a bid increment." });
+    }
+    if (!["draft", "approved", "active", "awaiting_payment"].includes(auction.status) || auction.winner) {
+      return res.status(400).json({ success: false, message: "The increment can only be changed before the auction ends." });
+    }
+    const next = Number(req.body?.bidIncrement);
+    const err = incrementChangeError(auction, next);
+    if (err) return res.status(400).json({ success: false, message: err });
+
+    // Only if no bid landed in the meantime (the minimum depends on it).
+    const updated = await Auction.findOneAndUpdate(
+      { _id: auction._id, bidCount: auction.bidCount, currentPrice: auction.currentPrice },
+      { $set: { bidIncrement: next } },
+      { new: true }
+    );
+    if (!updated) return res.status(409).json({ success: false, message: "A bid has just been placed. Please refresh and try again." });
+    broadcastAuctionChange(auction._id);
+    res.json({
+      success: true,
+      message: "Bid increment updated.",
+      data: { bidIncrement: updated.bidIncrement, minIncrement: minIncrementFor(incrementBasis(updated)) },
+    });
+  } catch (error) {
+    console.error("Change increment error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * @desc    Seller withdraws an edit waiting for approval (or clears a sent-back note)
+ * @route   DELETE /api/v1/auctions/:id/pending-edit
+ * @access  Private (seller)
+ */
+export const discardPendingEdit = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
+    if (auction.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+    await discardEdit(auction);
+    res.json({ success: true, message: "Changes discarded." });
+  } catch (error) {
+    if (!error?.status) console.error("Discard edit error:", error);
+    res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Internal server error" });
+  }
+};
+
+const ownLot = async (req, res) => {
+  const auction = await Auction.findById(req.params.id);
+  if (!auction) { res.status(404).json({ success: false, message: "Listing not found" }); return null; }
+  if (auction.seller.toString() !== req.user._id.toString()) { res.status(403).json({ success: false, message: "Not authorized" }); return null; }
+  return auction;
+};
+const promoFail = (res, error) => {
+  if (!error?.status) console.error("Listing promotion error:", error);
+  res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Could not start the payment. Please try again." });
+};
+
+/** GET /api/v1/auctions/:id/promote: what can still be bought, with prices. */
+export const getPromotionOptions = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (auction) res.json({ success: true, data: promotionOptions(auction) });
+  } catch (error) { promoFail(res, error); }
+};
+
+/** POST /api/v1/auctions/:id/promote { featured, metaBoostPackage }: starts the card payment. */
+export const startListingPromotion = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (!auction) return;
+    const seller = await User.findById(req.user._id);
+    const payment = await startPromotion(auction, seller, req.body || {});
+    res.json({ success: true, data: { payment } });
+  } catch (error) { promoFail(res, error); }
+};
+
+/** POST /api/v1/auctions/:id/promote/confirm { paymentIntentId } */
+export const confirmListingPromotion = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (!auction) return;
+    await confirmPromotion(auction, req.body?.paymentIntentId);
+    res.json({ success: true, message: "Payment received. Your promotion is on." });
+  } catch (error) { promoFail(res, error); }
 };

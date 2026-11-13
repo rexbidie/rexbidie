@@ -21,17 +21,16 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const navigation = [
-    { name: 'Dashboard', path: '/seller/dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'All Auctions', path: '/seller/auctions/all', icon: <Gavel size={20} /> },
+    { name: 'My Listings', path: '/seller/dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Create Listing', path: '/seller/auctions/create', icon: <Plus size={20} /> },
-    { name: 'Sold Auctions', path: '/seller/auctions/sold', icon: <Award size={20} /> },
-    { name: 'Bid History', path: '/seller/bids/history', icon: <TrendingUp size={20} /> },
-    { name: 'All Offers', path: '/seller/offers/all', icon: <Hand size={20} /> },
-    { name: 'Billing', path: '/seller/billing', icon: <CreditCard size={20} /> },
-    // { name: 'Notifications', path: '/seller/notifications', icon: <Bell size={20} /> },
-    { name: 'Payout Methods', path: '/seller/payout-methods', icon: <BanknoteArrowUp size={20} /> },
+    { name: 'Offers', path: '/seller/offers/all', icon: <Hand size={20} /> },
+    { name: 'Sold', path: '/seller/auctions/sold', icon: <Award size={20} /> },
     { name: 'Payouts', path: '/seller/payouts', icon: <BanknoteArrowDown size={20} /> },
     { name: 'Documents', path: '/seller/documents', icon: <FileText size={20} /> },
+    { name: 'Bid History', path: '/seller/bids/history', icon: <TrendingUp size={20} /> },
+    // Account
+    { name: 'Payout Account', path: '/seller/payout-methods', icon: <BanknoteArrowUp size={20} /> },
+    { name: 'Card & Billing', path: '/seller/billing', icon: <CreditCard size={20} /> },
     { name: 'Profile', path: '/seller/profile', icon: <User size={20} /> },
 ];
 

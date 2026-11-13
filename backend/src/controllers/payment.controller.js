@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { onExtrasPaid } from "../services/listingExtrasService.js";
+import { applyPaidPromotion } from "../services/listingPromotionService.js";
 import Auction from "../models/auction.model.js";
 import BidPayment from "../models/bidPayment.model.js";
 import User from "../models/user.model.js";
@@ -195,6 +196,7 @@ export const handleStripeWebhook = async (req, res) => {
             case "payment_intent.succeeded":
                 if (isSale) await recordPayment(pi);
                 else if (pi?.metadata?.type === 'listing_extras') await handleListingExtrasSuccess(pi);
+                else if (pi?.metadata?.type === 'listing_promotion') await applyPaidPromotion(pi);
                 else await handlePaymentSuccess(pi);
                 break;
             case "payment_intent.partially_funded":

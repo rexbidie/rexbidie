@@ -35,6 +35,8 @@ export const onExtrasPaid = async (auction) => {
   const firstTime = auction.extrasPayment.status !== "completed";
   auction.extrasPayment.status = "completed";
   if (!auction.extrasPayment.paidAt) auction.extrasPayment.paidAt = new Date();
+  // Paid Featured shows in Featured Ads (once the listing is live).
+  if (auction.featuredRequested && !auction.isFeatured) auction.isFeatured = true;
 
   let submitted = false;
   if (auction.status === "awaiting_payment") {
