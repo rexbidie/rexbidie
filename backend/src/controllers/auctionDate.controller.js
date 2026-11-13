@@ -1,4 +1,5 @@
 import AuctionDate from "../models/auctionDate.model.js";
+import { ensureCatalogueForSaleDate } from "../services/catalogueSyncService.js";
 import Auction from "../models/auction.model.js";
 
 // ── Admin: create ─────────────────────────────────────────
@@ -27,6 +28,10 @@ export const createAuctionDate = async (req, res) => {
             notes: notes || "",
             createdBy: req.user._id,
         });
+
+        // Its catalogue on the home page (services/catalogueSyncService.js).
+        await ensureCatalogueForSaleDate(slot, { createdBy: req.user._id })
+            .catch((e) => console.error("Auto catalogue failed:", e.message));
 
         res.status(201).json({
             success: true,
@@ -142,6 +147,10 @@ export const updateAuctionDate = async (req, res) => {
         if (isActive !== undefined) slot.isActive = isActive;
 
         await slot.save();
+        if (slot.isActive) {
+            await ensureCatalogueForSaleDate(slot, { createdBy: req.user._id })
+                .catch((e) => console.error("Auto catalogue failed:", e.message));
+        }
 
         res.status(200).json({
             success: true,
