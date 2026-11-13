@@ -41,7 +41,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import { compressAuctionImages } from '../../utils/compressImage.js';
 import { trackMeta } from '../../utils/metaPixel.js';
 import { TouchBackend } from 'react-dnd-touch-backend';
-import { validateMinStart, validateMinReserve, minimumsHint, suggestedIncrement } from '../../utils/listingRules';
+import { validateMinStart, validateMinReserve, minimumsHint, suggestedIncrement, minIncrementFor } from '../../utils/listingRules';
 import { FEATURED_FEE_EUR, SELLER_FEES_FREE_UNTIL, META_BOOST_PACKAGES, META_BOOST_MIN_HOURS_BEFORE_CLOSE, extraPriceLabel } from '../../utils/fees';
 import { HowSellingWorks, Hint, Note } from './ListingGuidance';
 import ListingExtrasPaymentModal from "./ListingExtrasPaymentModal";
@@ -1499,7 +1499,12 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                                 <input
                                                                     {...register('bidIncrement', {
                                                                         required: (watch('auctionType') === 'standard' || watch('auctionType') === 'reserve') ? 'Bid increment is required' : false,
-                                                                        min: { value: 0, message: 'Increment must be positive' }
+                                                                        min: { value: 0, message: 'Increment must be positive' },
+                                                                        validate: (value) => {
+                                                                            if (!(watch('auctionType') === 'standard' || watch('auctionType') === 'reserve')) return true;
+                                                                            const min = minIncrementFor(watch('startPrice'));
+                                                                            return parseFloat(value) >= min || `The minimum increment for this start price is ${currencySymbol}${min}`;
+                                                                        }
                                                                     })}
                                                                     id="bidIncrement"
                                                                     type="number"

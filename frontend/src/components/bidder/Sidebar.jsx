@@ -19,13 +19,13 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const navigation = [
-    { name: 'Dashboard', path: '/bidder/dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'Active Auctions', path: '/bidder/auctions/active', icon: <Gavel size={20} /> },
+    { name: 'My Bids', path: '/bidder/dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Watchlist', path: '/bidder/watchlist', icon: <Bookmark size={20} /> },
     { name: 'My Offers', path: '/bidder/offers', icon: <Hand size={20} /> },
-    { name: 'My Bids', path: '/bidder/bids', icon: <TrendingUp size={20} /> },
     { name: 'Won Auctions', path: '/bidder/auctions/won', icon: <Award size={20} /> },
     { name: 'Documents', path: '/bidder/documents', icon: <FileText size={20} /> },
+    { name: 'Browse Auctions', path: '/bidder/auctions/active', icon: <Gavel size={20} /> },
+    { name: 'Bid History', path: '/bidder/bids', icon: <TrendingUp size={20} /> },
     { name: 'Billing', path: '/bidder/billing', icon: <CreditCard size={20} /> },
     // { name: 'Notifications', path: '/bidder/notifications', icon: <Bell size={20} /> },
     { name: 'Profile', path: '/bidder/profile', icon: <User size={20} /> },

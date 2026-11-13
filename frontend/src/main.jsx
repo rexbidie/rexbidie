@@ -46,7 +46,6 @@ const SellerLayout = lazy(() => import('./pages/seller/Layout'));
 const SellerDashboard = lazy(() => import('./pages/seller/Dashboard'));
 const CreateAuctionSeller = lazy(() => import('./pages/seller/CreateAuction'));
 const EditAuctionSeller = lazy(() => import('./pages/seller/EditAuction'));
-const SellerAllAuctions = lazy(() => import('./pages/seller/AllAuctions'));
 const SellerAllOffers = lazy(() => import('./pages/seller/AllOffers'));
 const SoldAuctionsSeller = lazy(() => import('./pages/seller/SoldAuctions'));
 const BidHistorySeller = lazy(() => import('./pages/seller/BidHistory'));
@@ -62,7 +61,6 @@ const CompanyLayout = lazy(() => import('./pages/company/Layout'));
 const CompanyDashboard = lazy(() => import('./pages/company/Dashboard'));
 const CreateAuctionCompany = lazy(() => import('./pages/company/CreateAuction'));
 const EditAuctionCompany = lazy(() => import('./pages/company/EditAuction'));
-const CompanyAllAuctions = lazy(() => import('./pages/company/AllAuctions'));
 const CompanyAllOffers = lazy(() => import('./pages/company/AllOffers'));
 const SoldAuctionsCompany = lazy(() => import('./pages/company/SoldAuctions'));
 const BidHistoryCompany = lazy(() => import('./pages/company/BidHistory'));
@@ -78,7 +76,6 @@ const BrokerLayout = lazy(() => import('./pages/broker/Layout'));
 const BrokerDashboard = lazy(() => import('./pages/broker/Dashboard'));
 const CreateAuctionBroker = lazy(() => import('./pages/broker/CreateAuction'));
 const EditAuctionBroker = lazy(() => import('./pages/broker/EditAuction'));
-const BrokerAllAuctions = lazy(() => import('./pages/broker/AllAuctions'));
 const BrokerAllOffers = lazy(() => import('./pages/broker/AllOffers'));
 const SoldAuctionsBroker = lazy(() => import('./pages/broker/SoldAuctions'));
 const BidHistoryBroker = lazy(() => import('./pages/broker/BidHistory'));
@@ -105,6 +102,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AllUsers = lazy(() => import('./pages/admin/AllUsers'));
 const PilotUsers = lazy(() => import('./pages/admin/PilotUsers'));
 const AdminAllAuctions = lazy(() => import('./pages/admin/AllAuctions'));
+const AdminListingEdits = lazy(() => import('./pages/admin/ListingEdits'));
 const AdminCreateAuction = lazy(() => import('./pages/admin/CreateAuction'));
 const AdminEditAuction = lazy(() => import('./pages/admin/EditAuction'));
 const UserQueries = lazy(() => import('./pages/admin/UserQueries'));
@@ -241,11 +239,7 @@ createRoot(document.getElementById('root')).render(
                         {/* Seller Live Auctions */}
                         <Route
                             path='/seller/auctions/all'
-                            element={
-                                <Suspense fallback={<LoadingSpinner height={'750px'} />}>
-                                    <SellerAllAuctions />
-                                </Suspense>
-                            }
+                            element={<Navigate to='/seller/dashboard' replace />}
                         />
                         {/* Seller All Offers */}
                         <Route
@@ -365,11 +359,7 @@ createRoot(document.getElementById('root')).render(
                         {/* Company Live Auctions */}
                         <Route
                             path='/company/auctions/all'
-                            element={
-                                <Suspense fallback={<LoadingSpinner height={'750px'} />}>
-                                    <CompanyAllAuctions />
-                                </Suspense>
-                            }
+                            element={<Navigate to='/company/dashboard' replace />}
                         />
                         {/* Company All Offers */}
                         <Route
@@ -489,11 +479,7 @@ createRoot(document.getElementById('root')).render(
                         {/* Broker Live Auctions */}
                         <Route
                             path='/broker/auctions/all'
-                            element={
-                                <Suspense fallback={<LoadingSpinner height={'750px'} />}>
-                                    <BrokerAllAuctions />
-                                </Suspense>
-                            }
+                            element={<Navigate to='/broker/dashboard' replace />}
                         />
                         {/* Broker All Offers */}
                         <Route
@@ -718,6 +704,16 @@ createRoot(document.getElementById('root')).render(
                             element={
                                 <Suspense fallback={<LoadingSpinner height={'750px'} />}>
                                     <AdminAllAuctions />
+                                </Suspense>
+                            }
+                        />
+
+                        {/* Admin: edits to live listings waiting for approval */}
+                        <Route
+                            path='/admin/auctions/edits'
+                            element={
+                                <Suspense fallback={<LoadingSpinner height={'750px'} />}>
+                                    <AdminListingEdits />
                                 </Suspense>
                             }
                         />

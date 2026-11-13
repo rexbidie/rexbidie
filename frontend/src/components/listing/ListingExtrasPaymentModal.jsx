@@ -12,7 +12,7 @@ import { Loader, CreditCard } from "lucide-react";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
-const PaymentForm = ({ payment, auctionId, onSuccess, onClose }) => {
+const PaymentForm = ({ payment, auctionId, onSuccess, onClose, confirmUrl }) => {
     const stripe = useStripe();
     const elements = useElements();
     const [processing, setProcessing] = useState(false);
@@ -82,7 +82,7 @@ const PaymentForm = ({ payment, auctionId, onSuccess, onClose }) => {
 
         if (paymentIntent?.status === "succeeded") {
             try {
-                await axiosInstance.post("/api/v1/payments/confirm-listing-extras", {
+                await axiosInstance.post(confirmUrl || "/api/v1/payments/confirm-listing-extras", {
                     paymentIntentId: paymentIntent.id,
                     // Only signal "save" when a NEW card was entered and checked
                     saveCard: !usingSavedCard && saveCard,
@@ -92,7 +92,7 @@ const PaymentForm = ({ payment, auctionId, onSuccess, onClose }) => {
                         ? "Payment successful using your saved card!"
                         : saveCard
                             ? "Payment successful! Card saved for future payments."
-                            : "Payment successful! Your listing is pending approval."
+                            : (confirmUrl ? "Payment successful!" : "Payment successful! Your listing is pending approval.")
                 );
                 onSuccess?.(auctionId);
             } catch (err) {
@@ -234,17 +234,18 @@ const PaymentForm = ({ payment, auctionId, onSuccess, onClose }) => {
     );
 };
 
-const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSuccess }) => {
+// Also used for Featured / Meta Boost bought from the listing menu: pass
+// title, intro and confirmUrl (POST /api/v1/auctions/:id/promote/confirm).
+const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSuccess, title, intro, confirmUrl }) => {
     if (!isOpen || !payment) return null;
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b">
-                    <h2 className="text-xl font-semibold">Complete your listing payment</h2>
+                    <h2 className="text-xl font-semibold">{title || "Complete your listing payment"}</h2>
                     <p className="text-sm text-gray-600 mt-1">
-                        Your listing was created as a draft. Complete payment to publish it for
-                        admin review.
+                        {intro || "Your listing is saved but not submitted. Complete payment to submit it for review."}
                     </p>
                 </div>
                 <Elements stripe={stripePromise}>
@@ -253,6 +254,7 @@ const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSucc
                         auctionId={auctionId}
                         onSuccess={onSuccess}
                         onClose={onClose}
+                        confirmUrl={confirmUrl}
                     />
                 </Elements>
             </div>

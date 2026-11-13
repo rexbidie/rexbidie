@@ -32,6 +32,7 @@ import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/axiosInstance';
 import { validateMinStart, validateMinReserve, minimumsHint } from '../../utils/listingRules';
 import { minLivePrice, CLOSE_CUTOFF_HOURS } from '../../utils/liveBuyNow';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -490,6 +491,8 @@ const EditAuction = () => {
     const [parentCategories, setParentCategories] = useState([]);
     const [subCategories, setSubCategories] = useState([]);
     const [selectedParent, setSelectedParent] = useState(null);
+    const { user } = useAuth();
+    const [auction, setAuction] = useState(null);
     const [categoryFields, setCategoryFields] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
     const [loadingFields, setLoadingFields] = useState(false);
@@ -669,6 +672,7 @@ const EditAuction = () => {
 
                 if (data.success) {
                     const auction = data.data.auction;
+                    setAuction(auction);
                     const specificationsObj = mapToObject(auction.specifications);
                     setInitialSpecifications(specificationsObj);
 
@@ -1220,8 +1224,10 @@ const EditAuction = () => {
             );
 
             if (data.success) {
-                toast.success('Auction updated successfully!');
-                navigate('/broker/auctions/all');
+                // Live listings: the changes wait for RexBid's approval and the
+                // listing stays up as it is (backend services/listingEditService.js).
+                toast.success(data.message || 'Listing updated', { duration: data.pendingApproval ? 9000 : 5000 });
+                navigate('/broker/dashboard');
             } else {
                 throw new Error(data.message || 'Failed to update auction');
             }
@@ -1285,7 +1291,16 @@ const EditAuction = () => {
                                 >
                                     <ArrowLeft size={20} />
                                 </button>
-                                <h1 className="text-3xl md:text-4xl font-bold">Edit Auction (Broker)</h1>
+                                <h1 className="text-3xl md:text-4xl font-bold">Edit Listing</h1>
+                                {auction && ['active', 'approved'].includes(auction.status) && (
+                                    <div className="mt-4 rounded-lg bg-[#E7EEF8] text-[#23446E] p-3 text-sm">
+                                        This listing is {auction.status === 'active' ? 'live' : 'approved'}. Your changes go to RexBid for approval and the listing stays up with its current details until they're approved (usually within 12 hours).
+                                        {Number(auction.bidCount) > 0 && ' It has bids, so the title, category, start price, reserve, bid increment and sale date are locked. Use Lower reserve or Change increment on My Listings for those.'}
+                                    </div>
+                                )}
+                                {auction?.pendingEdit?.status === 'pending' && (
+                                    <div className="mt-3 rounded-lg bg-amber-50 text-amber-900 p-3 text-sm">You already have changes waiting for approval. Saving again replaces them.</div>
+                                )}
                             </div>
                             {/* <p className="text-gray-600 mb-8">Update auction listing as broker</p> */}
 

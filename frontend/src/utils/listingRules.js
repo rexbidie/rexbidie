@@ -33,3 +33,21 @@ export const suggestedIncrement = (expectedPrice) => {
     if (p <= 20000) return 250;
     return 500;
 };
+
+// Minimum bid increments by current bid (start price before the first bid).
+// Same numbers in € and £. Mirrors backend/src/utils/listingRules.js.
+export const INCREMENT_BANDS = [
+    { below: 1000, min: 25, label: 'Under 1,000' },
+    { below: 5000, min: 50, label: '1,000 – 4,999' },
+    { below: 15000, min: 100, label: '5,000 – 14,999' },
+    { below: 30000, min: 150, label: '15,000 – 29,999' },
+    { below: 60000, min: 250, label: '30,000 – 59,999' },
+    { below: 100000, min: 500, label: '60,000 – 99,999' },
+    { below: Infinity, min: 1000, label: '100,000 and over' },
+];
+
+/** Minimum increment for a current bid (or start price). */
+export const minIncrementFor = (price) => {
+    const p = Number(price) || 0;
+    return INCREMENT_BANDS.find((b) => p < b.below).min;
+};

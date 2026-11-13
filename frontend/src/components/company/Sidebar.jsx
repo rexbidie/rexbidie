@@ -21,17 +21,16 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const navigation = [
-    { name: 'Dashboard', path: '/company/dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'All Auctions', path: '/company/auctions/all', icon: <Gavel size={20} /> },
+    { name: 'My Listings', path: '/company/dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Create Listing', path: '/company/auctions/create', icon: <Plus size={20} /> },
-    { name: 'Sold Auctions', path: '/company/auctions/sold', icon: <Award size={20} /> },
-    { name: 'Bid History', path: '/company/bids/history', icon: <TrendingUp size={20} /> },
-    { name: 'All Offers', path: '/company/offers/all', icon: <Hand size={20} /> },
-    { name: 'Billing', path: '/company/billing', icon: <CreditCard size={20} /> },
-    // { name: 'Notifications', path: '/company/notifications', icon: <Bell size={20} /> },
-    { name: 'Payout Methods', path: '/company/payout-methods', icon: <BanknoteArrowUp size={20} /> },
+    { name: 'Offers', path: '/company/offers/all', icon: <Hand size={20} /> },
+    { name: 'Sold', path: '/company/auctions/sold', icon: <Award size={20} /> },
     { name: 'Payouts', path: '/company/payouts', icon: <BanknoteArrowDown size={20} /> },
     { name: 'Documents', path: '/company/documents', icon: <FileText size={20} /> },
+    { name: 'Bid History', path: '/company/bids/history', icon: <TrendingUp size={20} /> },
+    // Account
+    { name: 'Payout Account', path: '/company/payout-methods', icon: <BanknoteArrowUp size={20} /> },
+    { name: 'Card & Billing', path: '/company/billing', icon: <CreditCard size={20} /> },
     { name: 'Profile', path: '/company/profile', icon: <User size={20} /> },
 ];
 

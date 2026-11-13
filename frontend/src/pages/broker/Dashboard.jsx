@@ -1,112 +1,18 @@
-import { useEffect } from "react";
-import { QuickActions, StatCard, BrokerContainer, BrokerHeader, BrokerSidebar } from "../../components";
-import { useState } from "react";
-import { TrendingUp, Gavel, Award, Heart, DollarSign, Clock, Eye } from "lucide-react";
-import axiosInstance from "../../utils/axiosInstance";
+import { BrokerContainer, BrokerHeader, BrokerSidebar } from "../../components";
+import MyListingsDashboard from "../../components/dashboard/seller/MyListingsDashboard";
 
+// Dashboard home: the seller's listings first (see MyListingsDashboard).
 function Dashboard() {
-    const [stats, setStats] = useState({});
-
-    const fetchUserStats = async () => {
-        try {
-            const { data } = await axiosInstance.get('/api/v1/users/stats/seller');
-            if (data.success) {
-                setStats(data.data.statistics);
-            }
-        } catch (err) {
-            console.error('Fetch stats error:', err);
-        }
-    };
-
-    useEffect(() => {
-        fetchUserStats();
-    }, []);
-
-    const statsData = [
-        {
-            title: "Total Revenue",
-            value: stats?.totalRevenue?.toLocaleString('nb-NO'),
-            change: "All Time",
-            icon: <DollarSign size={24} />,
-            trend: "up",
-            currency: " kr"
-        },
-        {
-            title: "Active Auctions",
-            value: stats?.activeAuctions,
-            change: "Active Right Now",
-            icon: <Clock size={24} />,
-            trend: "up"
-        },
-        {
-            title: "Items Sold",
-            value: stats?.soldAuctions,
-            change: "Previously Sold",
-            icon: <Award size={24} />,
-            trend: "up"
-        },
-        {
-            title: "Success Rate",
-            value: stats && stats?.successRate,
-            change: "Sold%Ended",
-            icon: <TrendingUp size={24} />,
-            trend: "up",
-            suffix: "%"
-        },
-        {
-            title: "Total Bids",
-            value: stats?.totalBidsReceived,
-            change: "All Time",
-            icon: <Gavel size={24} />,
-            trend: "up"
-        },
-        {
-            title: "Avg. Sale Price",
-            value: stats?.avgSalePrice?.toLocaleString('nb-NO'),
-            change: "Per Item Sold",
-            icon: <DollarSign size={24} />,
-            trend: "up",
-            currency: " kr"
-        },
-        {
-            title: "Watchlist Items",
-            value: stats?.totalWatchlists,
-            change: "Saved To Watchlist",
-            icon: <Heart size={24} />,
-            trend: "up"
-        },
-        {
-            title: "Total Views",
-            value: stats?.totalViews,
-            change: "All Auctions Views",
-            icon: <Eye size={24} />,
-            trend: "up"
-        },
-    ];
-
     return (
         <section className="flex min-h-[70vh]">
             <BrokerSidebar />
 
-            <div className="w-full relative">
+            <div className="w-full min-w-0 relative">
                 <BrokerHeader />
 
                 <BrokerContainer>
-                    <div className="max-w-full pt-16 pb-7 md:pt-0">
-                        <h2 className="text-3xl md:text-4xl font-bold my-5">Broker Dashboard</h2>
-                        {/* <p className="text-secondary">Easily track your auctions in one place.</p> */}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {
-                            statsData.map(stat => (
-                                <StatCard key={stat.title} {...stat} />
-                            ))
-                        }
-                    </div>
-
-                    <div className="space-y-6 mb-16">
-                        <QuickActions />
+                    <div className="pt-16 md:pt-6">
+                        <MyListingsDashboard basePath="/broker" />
                     </div>
                 </BrokerContainer>
             </div>

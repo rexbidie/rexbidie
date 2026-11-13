@@ -18,14 +18,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const navigation = [
-    { name: 'Dashboard', path: '/broker/dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'All Auctions', path: '/broker/auctions/all', icon: <Gavel size={20} /> },
-    { name: 'Create Auction', path: '/broker/auctions/create', icon: <Plus size={20} /> },
-    { name: 'Sold Auctions', path: '/broker/auctions/sold', icon: <Award size={20} /> },
+    { name: 'My Listings', path: '/broker/dashboard', icon: <LayoutDashboard size={20} /> },
+    { name: 'Create Listing', path: '/broker/auctions/create', icon: <Plus size={20} /> },
+    { name: 'Offers', path: '/broker/offers/all', icon: <Hand size={20} /> },
+    { name: 'Sold', path: '/broker/auctions/sold', icon: <Award size={20} /> },
     { name: 'Bid History', path: '/broker/bids/history', icon: <TrendingUp size={20} /> },
-    { name: 'All Offers', path: '/broker/offers/all', icon: <Hand size={20} /> },
-    // { name: 'Billing', path: '/broker/billing', icon: <CreditCard size={20} /> },
-    // { name: 'Notifications', path: '/broker/notifications', icon: <Bell size={20} /> },
     { name: 'Profile', path: '/broker/profile', icon: <User size={20} /> },
 ];
 
