@@ -89,6 +89,15 @@ the app build (`npm run app:build`, Vite mode `app`). Full guide: **`docs/MOBILE
   API `/api/v1/notifications`.
 - **CORS** now also allows the app origins `capacitor://localhost`, `https://localhost`, `http://localhost`.
 - Firebase config files, signing keys and `.env.app.local` (Stripe key) are **never committed**.
+- **Sessions:** one refresh token per device (`user.sessions`, hashed, max 10; `utils/sessions.js`), so the
+  app and website no longer sign each other out. *Keep me signed in* = 90 days (`REMEMBER_ME_REFRESH_EXPIRY`),
+  otherwise 7 days; the app always remembers. Password reset signs out every device. New `POST /api/v1/users/logout`.
+- **Email / notification categories:** `utils/emailPreferences.js` (`user.preferences.email.*`, `.push.*`).
+  Always sent: payments, auction won, offer accepted, item sold, account/security. Offer counter/decline/withdraw
+  and listing approved/listed emails are now optional (category Offers / My listings). The old
+  `emailUpdates` switch still turns every optional email off. Marketing campaigns skip `email.news = false`.
+- **Account deletion:** `POST /api/v1/users/me/delete` (password + "DELETE"), `GET /api/v1/users/me/deletion-check`;
+  anonymises the user (`deletedAt`), keeps sale records. Page `/delete-account`.
 
 ---
 

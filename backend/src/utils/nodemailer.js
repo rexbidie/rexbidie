@@ -736,6 +736,7 @@ const auctionSubmittedForApprovalEmail = async (adminEmail, auction, seller) => 
 
 // 7. Auction approved and live for seller
 const auctionApprovedEmail = async (seller, listing) => {
+    if (!(await canSendEmail(seller?.email, "auctionApproved"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Listing Approved and Live</h2>
@@ -791,6 +792,7 @@ const auctionApprovedEmail = async (seller, listing) => {
 
 // 8. Auction listed and live for seller (working one)
 const auctionListedEmail = async (listing, seller) => {
+    if (!(await canSendEmail(seller?.email, "auctionListed"))) return false;
     try {
         const content = `
             <h2>Your Listing is Now Live</h2>
@@ -2169,6 +2171,7 @@ const offerRejectedEmail = async (
     offerId,
     reason,
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerRejected"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Offer Declined</h2>
@@ -2232,6 +2235,7 @@ const offerCanceledEmail = async (
     offerAmount,
     offerId
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerCanceled"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Offer Canceled</h2>
@@ -2290,6 +2294,7 @@ const offerCounteredEmail = async (
     offerId,
     expiresAt
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerCountered"))) return false;
     try {
         const diff = Number(counterAmount) - Number(originalOfferAmount);
         const expiresStr = expiresAt
@@ -2371,6 +2376,7 @@ const buyerCounteredEmail = async (
     message,
     offerId
 ) => {
+    if (!(await canSendEmail(sellerEmail, "buyerCountered"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Buyer Countered Your Offer</h2>
@@ -2444,6 +2450,7 @@ const counterOfferRejectedEmail = async (
     counterAmount,  // seller's counter that was rejected, in seller currency
     offerId
 ) => {
+    if (!(await canSendEmail(sellerEmail, "counterOfferRejected"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Counter Offer Declined</h2>
@@ -4530,6 +4537,7 @@ const renderBinInviteEmail = (seller, lots, { deadline } = {}) => {
 
 const sendBinInviteEmail = async (to, rendered) => {
     if (!to) return false;
+    if (!(await canSendEmail(to, "binInvite"))) return false;
     const info = await transporter.sendMail({
         from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
         to,
@@ -4540,7 +4548,41 @@ const sendBinInviteEmail = async (to, rendered) => {
     return !!info;
 };
 
+// Account deleted by the user: confirmation to their (old) address, and a note to the office.
+const accountDeletedEmail = async ({ email, name, userType }, { reason } = {}) => {
+    const content = `
+            <h2 style="text-align: center;">Your account has been deleted</h2>
+            <p>Hi ${escapeHtml(name || 'there')},</p>
+            <p>As you asked, your ${BRAND_NAME} account has been deleted. You've been signed out on every device and won't get any more emails from us.</p>
+            <p>We've removed your personal details, saved cards and ID documents. Records of completed sales, receipts and payouts are kept for as long as the law requires for accounting and tax, as explained in our privacy policy.</p>
+            <p>If you didn't ask for this, please reply to this email straight away.</p>
+            <p>You're welcome back any time: just register again.</p>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: `Your ${BRAND_NAME} account has been deleted`,
+        html: baseTemplate(content, 'Account deleted'),
+    });
+    if (process.env.EMAIL_USER) {
+        await transporter.sendMail({
+            from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+            to: process.env.EMAIL_USER,
+            subject: `Account deleted by user (${userType || 'user'})`,
+            html: baseTemplate(`
+                <h2>Account deleted</h2>
+                <p>A ${escapeHtml(userType || 'user')} deleted their own account.</p>
+                <p><strong>Email was:</strong> ${escapeHtml(email)}</p>
+                ${reason ? `<p><strong>Reason given:</strong> ${escapeHtml(reason)}</p>` : ''}
+                <p>Personal details have been removed. Sale records and payouts are unchanged.</p>
+            `, 'Account deleted'),
+        }).catch((err) => console.error('Account deleted admin note failed:', err.message));
+    }
+    return !!info;
+};
+
 export {
+    accountDeletedEmail,
     liveBuyNowBidderEmail,
     renderBinInviteEmail,
     sendBinInviteEmail,

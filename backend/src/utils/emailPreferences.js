@@ -1,15 +1,22 @@
 import User from "../models/user.model.js";
 
 /**
- * Emails that must ALWAYS be sent regardless of user preferences.
- * These are account-critical (security, payments, invoices, legal,
- * contract/negotiation outcomes, seller-facing listing status).
+ * Which emails people can switch off.
+ *
+ * Always sent (can't be switched off): account and security, anything about
+ * money (payment requests, reminders, receipts, statements, payouts), auction
+ * won, your item sold, offer accepted, giveaway won, and emails to admins.
+ *
+ * Everything else belongs to a category the user can switch off in their
+ * profile (Notifications), on the website or in the app. The same categories
+ * apply to app notifications (see utils/push.js).
  */
 export const TRANSACTIONAL_EMAILS = new Set([
     // Account / security
     "welcome",
     "resetPassword",
     "accountApproved",
+    "accountDeleted",
     "newUserRegistration",     // to admin
     "contact",                 // to admin
     "contactConfirmation",     // to the user (acknowledgement)
@@ -23,25 +30,11 @@ export const TRANSACTIONAL_EMAILS = new Set([
     "payoutFailed",
     "sendAuctionWon",          // invoice to winner
 
-    // Offer / negotiation outcomes
+    // Offer accepted (a sale)
     "offerAccepted",
-    "offerRejected",
-    "offerCanceled",
-    "offerCountered",
-    "buyerCountered",
-    "counterOfferRejected",
 
-    // Listing lifecycle (to seller about their own listing)
-    "auctionSubmittedForApproval",
-    "auctionApproved",
-    "auctionListed",
+    // Your item sold / your listing ended
     "sendAuctionEndedSeller",
-    "newQuestionSeller",       // a buyer asked a question on the seller's listing
-    "postAuctionBinSeller",    // Buy It Now after the auction: invite / live / ended
-    "postAuctionBinTopBidder", // the top bidder hears first that the lot is on Buy It Now
-
-    // Questions & Answers: the buyer asked, so they always hear the answer
-    "questionAnswered",
 
     // Admin / system
     "auctionWonAdmin",
@@ -54,21 +47,80 @@ export const TRANSACTIONAL_EMAILS = new Set([
     "giveawayWinner",
 ]);
 
+/** Categories shown to users, in display order. */
+export const NOTIFICATION_CATEGORIES = [
+    { key: "bidding", label: "Bidding", description: "Bid confirmations, outbid alerts and reserve not met" },
+    { key: "reminders", label: "Ending soon", description: "Reminders before lots you bid on or follow close" },
+    { key: "watchlist", label: "Watchlist", description: "New bids on lots in your watchlist" },
+    { key: "offers", label: "Offers", description: "Offers made, countered, declined or withdrawn" },
+    { key: "buyItNow", label: "Buy It Now", description: "Lots you bid on or follow going on Buy It Now" },
+    { key: "questions", label: "Questions", description: "Questions and answers on listings" },
+    { key: "myListings", label: "My listings (sellers)", description: "New bids, approvals, reserve tips and Buy It Now for your own listings" },
+    { key: "newListings", label: "New listings", description: "Alerts about newly listed machinery" },
+    { key: "news", label: "News and offers from RexBid", description: "Occasional updates, sale dates and promotions" },
+];
+export const CATEGORY_KEYS = NOTIFICATION_CATEGORIES.map((c) => c.key);
+
+/** Email type → category. Types not listed and not transactional count as "news". */
+export const EMAIL_CATEGORY = {
+    bidConfirmation: "bidding",
+    outbid: "bidding",
+    reserveNotMet: "bidding",
+
+    endingSoon: "reminders",
+
+    watchlist: "watchlist",
+
+    offerConfirmation: "offers",
+    newOffer: "offers",
+    offerRejected: "offers",
+    offerCanceled: "offers",
+    offerCountered: "offers",
+    buyerCountered: "offers",
+    counterOfferRejected: "offers",
+
+    postAuctionBin: "buyItNow",
+    postAuctionBinTopBidder: "buyItNow",
+
+    newComment: "questions",
+    newQuestionSeller: "questions",
+    questionAnswered: "questions",
+
+    newBid: "myListings",
+    endingSoonSeller: "myListings",
+    reserveNudge: "myListings",
+    postAuctionBinSeller: "myListings",
+    auctionApproved: "myListings",
+    auctionListed: "myListings",
+    binInvite: "myListings",
+
+    newAuction: "newListings",
+
+    giveawayParticipation: "news",
+    marketing: "news",
+};
+
+const categoryFor = (emailType) => EMAIL_CATEGORY[emailType] || "news";
+
+/** Is this category switched on for this channel ("email" or "push")? */
+export const wantsCategory = (user, category, channel = "email") => {
+    if (!user) return false;
+    const prefs = user.preferences || {};
+    // The old single switch still turns off every optional email.
+    if (channel === "email" && prefs.emailUpdates === false) return false;
+    return prefs[channel]?.[category] !== false;
+};
+
 /**
- * Sync check — call when you already have a user object in hand.
+ * Sync check — call when you already have a user object in hand
+ * (it needs `preferences` and `userType`).
  * Returns true if the email should be sent.
  */
 export const canEmailUser = (user, emailType = "notification") => {
     if (!user) return false;
-
-    // Transactional / security — always send
     if (TRANSACTIONAL_EMAILS.has(emailType)) return true;
-
-    // Admins always get system emails
     if (user.userType === "admin") return true;
-
-    // Master switch — default true if field is missing
-    return user.preferences?.emailUpdates !== false;
+    return wantsCategory(user, categoryFor(emailType), "email");
 };
 
 /**
@@ -91,7 +143,22 @@ export const canSendEmail = async (email, emailType = "notification") => {
         .lean();
 
     if (!user) return false;
-    if (user.userType === "admin") return true;
+    return canEmailUser(user, emailType);
+};
 
-    return user.preferences?.emailUpdates !== false;
+/**
+ * Clean a preferences update from the browser/app. Returns the $set object
+ * (only known keys, booleans only), or null if there's nothing valid.
+ */
+export const preferencesUpdate = (input = {}) => {
+    const set = {};
+    if (typeof input.emailUpdates === "boolean") set["preferences.emailUpdates"] = input.emailUpdates;
+    for (const channel of ["email", "push"]) {
+        const given = input[channel];
+        if (!given || typeof given !== "object") continue;
+        for (const key of CATEGORY_KEYS) {
+            if (typeof given[key] === "boolean") set[`preferences.${channel}.${key}`] = given[key];
+        }
+    }
+    return Object.keys(set).length ? set : null;
 };

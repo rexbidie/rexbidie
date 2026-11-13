@@ -60,6 +60,29 @@ The backend now also accepts requests from the app's own addresses
 
 ---
 
+## 1a. Sign-in, notification settings and account deletion
+
+**Keep me signed in.** Each device now has its own sign-in, so being signed in on the phone no
+longer signs you out of the website. On the website, ticking *Keep me signed in* keeps you signed in
+for 90 days without use (otherwise 7 days, as before). The app always keeps you signed in.
+Resetting a forgotten password signs out every device. Render settings (optional):
+`REMEMBER_ME_REFRESH_EXPIRY` (default `90d`), `REFRESH_TOKEN_EXPIRY` (default `7d`).
+
+**Notification settings** (Profile → Notifications, website and app). Users switch each category
+on or off for email and, in the app, for notifications: Bidding, Ending soon, Watchlist, Offers,
+Buy It Now, Questions, My listings, New listings, News. **Always sent:** payments (requests,
+reminders, receipts, payouts), auction won, offer accepted, your item sold, account and security.
+Rules in `backend/src/utils/emailPreferences.js`.
+
+**Account deletion** (Profile → Security, and rexbid.ie/delete-account). Needs the password and
+typing DELETE. Refused while the user has live/upcoming listings, a leading or proxy bid on a live
+lot, an open offer, or an unfinished sale or payout. The account is anonymised: personal details,
+saved cards (Stripe customer), ID document, devices, notifications, watchlist and reminders are
+removed; sale records and payouts are kept. The user gets a confirmation email and the office gets
+a note. Code: `backend/src/services/accountDeletionService.js`.
+
+---
+
 ## 2. One-off setup (owner)
 
 ### Accounts
@@ -134,8 +157,10 @@ Made from the website logo (`frontend/assets/`). To change them, replace the ima
 - **Apple privacy "nutrition label":** collects name, email, phone, address (account and purchases),
   payment info (via Stripe), photos (seller listings), device ID for notifications. **No tracking**, no third-party advertising.
 - **Google Play Data safety:** the same; data encrypted in transit; users can request deletion via admin@rexbid.ie.
-- **Account deletion:** Apple and Google require a way to ask for account deletion. Point them to the
-  contact page / admin@rexbid.ie for now; an in-app "Delete my account" button is a sensible follow-up.
+- **Account deletion:** in the app and website at Profile → Security → Delete my account, and
+  explained at https://rexbid.ie/delete-account (give this link to Google).
+- Ready-to-paste store text, keywords and privacy answers: `docs/mobile-app/store-listing.md`.
+- Privacy policy additions for the app (draft, needs your approval): `docs/mobile-app/privacy-policy-app-section.md`.
 
 Screenshots: 6.7" and 6.5" iPhone, plus phone screenshots for Google Play. Take them from the
 TestFlight / internal-testing build.

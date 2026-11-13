@@ -6,6 +6,7 @@ import {
   deleteFromCloudinary,
 } from "../utils/cloudinary.js";
 import bcrypt from "bcrypt";
+import { preferencesUpdate } from "../utils/emailPreferences.js";
 
 const convertPrice = (auction, targetCurrency, priceField) => {
   const rates = getCachedRates();
@@ -186,17 +187,19 @@ export const updatePreferences = async (req, res) => {
     const userId = req.user._id;
     const { preferences } = req.body;
 
-    if (!preferences || typeof preferences.emailUpdates !== "boolean") {
+    // emailUpdates (master switch) and/or per-category email / push choices.
+    const $set = preferencesUpdate(preferences);
+    if (!$set) {
       return res.status(400).json({
         success: false,
-        message: "preferences.emailUpdates must be a boolean",
+        message: "No valid preferences given",
       });
     }
 
     // Merge instead of replacing the whole object
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { $set: { "preferences.emailUpdates": preferences.emailUpdates } },
+      { $set },
       { new: true, runValidators: true }
     ).select("-password -refreshToken");
 

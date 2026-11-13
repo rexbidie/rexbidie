@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import useCountryStates from '../hooks/useCountryStates';
 import { getGaClientId } from '../utils/ga.js';
 import { trackMetaRegistration } from '../utils/metaPixel.js';
+import { isNativeApp } from '../native/platform';
 
 const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const [activeTab, setActiveTab] = useState('login');
@@ -54,6 +55,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                     email: data.email.toLowerCase().trim(),
                     password: data.password,
                     gaClientId: getGaClientId() || '',
+                    rememberMe: isNativeApp,
                 },
                 { withCredentials: true }
             );

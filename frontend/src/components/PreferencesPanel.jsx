@@ -1,104 +1,150 @@
 import { useState, useEffect } from "react";
-import { Mail } from "lucide-react";
+import { Mail, Smartphone, Lock } from "lucide-react";
 import toast from "react-hot-toast";
+import { isNativeApp } from "../native/platform";
+
+/**
+ * Notification settings. Mirrors backend/src/utils/emailPreferences.js.
+ * Payment, auction won, offer accepted, item sold and account emails are
+ * always sent and are listed (locked) so people know.
+ */
+const NOTIFICATION_CATEGORIES = [
+    { key: "bidding", label: "Bidding", description: "Bid confirmations, outbid alerts and reserve not met", push: true },
+    { key: "reminders", label: "Ending soon", description: "Reminders before lots you bid on or follow close", push: true },
+    { key: "watchlist", label: "Watchlist", description: "New bids on lots in your watchlist" },
+    { key: "offers", label: "Offers", description: "Offers made, countered, declined or withdrawn" },
+    { key: "buyItNow", label: "Buy It Now", description: "Lots you bid on or follow going on Buy It Now", push: true },
+    { key: "questions", label: "Questions", description: "Questions and answers on listings", push: true },
+    { key: "myListings", label: "My listings (sellers)", description: "New bids, approvals, reserve tips and Buy It Now for your own listings" },
+    { key: "newListings", label: "New listings", description: "Alerts about newly listed machinery" },
+    { key: "news", label: "News and offers from RexBid", description: "Occasional updates, sale dates and promotions" },
+];
+
+const ALWAYS_SENT = [
+    "Payment requests, reminders and receipts",
+    "Auction won",
+    "Offer accepted",
+    "Your item sold, buyer paid and payouts",
+    "Account and security (password reset, approval)",
+];
+
+function Switch({ on, onClick, disabled, label }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={label}
+            onClick={onClick}
+            disabled={disabled}
+            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${on ? "bg-orange-500" : "bg-gray-300"} ${disabled ? "opacity-50 cursor-wait" : "cursor-pointer"}`}
+        >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${on ? "translate-x-6" : "translate-x-1"}`} />
+        </button>
+    );
+}
+
+const read = (prefs) => ({
+    emailUpdates: prefs?.emailUpdates ?? true,
+    email: Object.fromEntries(NOTIFICATION_CATEGORIES.map((c) => [c.key, prefs?.email?.[c.key] ?? true])),
+    push: Object.fromEntries(NOTIFICATION_CATEGORIES.map((c) => [c.key, prefs?.push?.[c.key] ?? true])),
+});
 
 const PreferencesPanel = ({ initialPreferences, onSave, saving: externalSaving }) => {
-    const [emailUpdates, setEmailUpdates] = useState(
-        initialPreferences?.emailUpdates ?? true
-    );
+    const [prefs, setPrefs] = useState(() => read(initialPreferences));
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        setEmailUpdates(initialPreferences?.emailUpdates ?? true);
-    }, [initialPreferences?.emailUpdates]);
+        setPrefs(read(initialPreferences));
+    }, [initialPreferences]);
 
-    const handleToggle = async () => {
-        const next = !emailUpdates;
-        const prev = emailUpdates;
-        setEmailUpdates(next); // optimistic
+    const save = async (next, update, message) => {
+        const prev = prefs;
+        setPrefs(next); // optimistic
         setSaving(true);
-
         try {
-            const success = await onSave({ emailUpdates: next });
-            if (!success) {
-                setEmailUpdates(prev); // revert
-                toast.error("Failed to update preference");
-            } else {
-                toast.success(
-                    next
-                        ? "Email notifications enabled"
-                        : "Email notifications disabled"
-                );
-            }
-        } catch (err) {
-            setEmailUpdates(prev);
+            const ok = await onSave(update);
+            if (!ok) throw new Error("save failed");
+            toast.success(message);
+        } catch {
+            setPrefs(prev);
             toast.error("Failed to update preference");
         } finally {
             setSaving(false);
         }
     };
 
-    const isDisabled = saving || externalSaving;
+    const toggleAll = () => {
+        const on = !prefs.emailUpdates;
+        save({ ...prefs, emailUpdates: on }, { emailUpdates: on }, on ? "Optional emails turned on" : "Optional emails turned off");
+    };
+
+    const toggle = (channel, key, label) => {
+        const on = !prefs[channel][key];
+        save(
+            { ...prefs, [channel]: { ...prefs[channel], [key]: on } },
+            { [channel]: { [key]: on } },
+            `${label} ${channel === "push" ? "app notifications" : "emails"} ${on ? "on" : "off"}`,
+        );
+    };
+
+    const busy = saving || externalSaving;
+    const showPush = isNativeApp;
 
     return (
         <div className="space-y-6">
-            <div
-                className={`rounded-lg p-4 ${emailUpdates
-                        ? "bg-green-50 border border-green-200"
-                        : "bg-gray-50 border border-gray-200"
-                    }`}
-            >
-                <div className="flex items-start gap-3">
-                    <Mail
-                        size={24}
-                        className={emailUpdates ? "text-green-600" : "text-gray-500"}
-                    />
-                    <div className="flex-1">
-                        <h4 className="font-semibold text-lg">
-                            Email Notifications
-                        </h4>
-                        <p className="text-sm text-secondary mt-1">
-                            When enabled, you'll receive email notifications about
-                            new bids, outbids, watchlist activity, offers, and
-                            auction reminders.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
             <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                 <div className="pr-4">
-                    <p className="font-medium">Enable email notifications</p>
-                    <p className="text-sm text-gray-500">
-                        Master switch for all notification emails
-                    </p>
+                    <p className="font-medium">Optional emails</p>
+                    <p className="text-sm text-gray-500">Turn off to stop every email below in one go</p>
                 </div>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={emailUpdates}
-                    onClick={handleToggle}
-                    disabled={isDisabled}
-                    className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${emailUpdates ? "bg-orange-500" : "bg-gray-300"
-                        } ${isDisabled ? "opacity-50 cursor-wait" : "cursor-pointer"}`}
-                >
-                    <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${emailUpdates ? "translate-x-6" : "translate-x-1"
-                            }`}
-                    />
-                </button>
+                <Switch on={prefs.emailUpdates} onClick={toggleAll} disabled={busy} label="All optional emails" />
             </div>
 
-            {!emailUpdates && (
-                <div className="rounded-lg p-4 bg-amber-50 border border-amber-200">
-                    <p className="text-sm text-amber-800">
-                        <strong>Note:</strong> Important account emails
-                        (password reset, payment confirmations, invoices, payouts,
-                        and security alerts) will still be sent to keep your
-                        account secure.
-                    </p>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="flex items-center justify-end gap-6 px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <span className="flex items-center gap-1 w-12 justify-center"><Mail size={14} /> Email</span>
+                    {showPush && <span className="flex items-center gap-1 w-12 justify-center"><Smartphone size={14} /> App</span>}
                 </div>
-            )}
+                <ul className="divide-y divide-gray-200">
+                    {NOTIFICATION_CATEGORIES.map((c) => (
+                        <li key={c.key} className="flex items-center gap-4 px-4 py-3">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-medium text-secondary">{c.label}</p>
+                                <p className="text-sm text-gray-500">{c.description}</p>
+                            </div>
+                            <Switch
+                                on={prefs.emailUpdates && prefs.email[c.key]}
+                                onClick={() => toggle("email", c.key, c.label)}
+                                disabled={busy || !prefs.emailUpdates}
+                                label={`${c.label} emails`}
+                            />
+                            {showPush && (
+                                c.push ? (
+                                    <Switch on={prefs.push[c.key]} onClick={() => toggle("push", c.key, c.label)} disabled={busy} label={`${c.label} app notifications`} />
+                                ) : (
+                                    <span className="w-12 text-center text-gray-300" title="No app notifications for this">–</span>
+                                )
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <div className="rounded-lg p-4 bg-gray-50 border border-gray-200">
+                <p className="flex items-center gap-2 font-medium text-secondary">
+                    <Lock size={16} /> Always sent
+                </p>
+                <p className="text-sm text-gray-600 mt-1">These are part of buying and selling, so they can&rsquo;t be turned off:</p>
+                <ul className="mt-2 text-sm text-gray-600 list-disc pl-5 space-y-0.5">
+                    {ALWAYS_SENT.map((t) => <li key={t}>{t}</li>)}
+                </ul>
+                {showPush && (
+                    <p className="text-sm text-gray-500 mt-2">
+                        To stop all app notifications, turn them off for RexBid in your phone&rsquo;s Settings.
+                    </p>
+                )}
+            </div>
         </div>
     );
 };

@@ -36,6 +36,7 @@ const Catalogues = lazy(() => import('./pages/Catalogues'));
 const BuyItNow = lazy(() => import('./pages/BuyItNow'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AdminOnWebsite = lazy(() => import('./pages/AdminOnWebsite'));
+const DeleteAccount = lazy(() => import('./pages/DeleteAccount'));
 const RateUs = lazy(() => import('./pages/RateUs'));
 const Reviews = lazy(() => import('./pages/WhatOurClientsSay'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -196,6 +197,8 @@ createRoot(document.getElementById('root')).render(
                         <Route path='/buy-it-now' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><BuyItNow /></Suspense>} />
 
                         <Route path='/notifications' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Notifications /></Suspense>} />
+
+                        <Route path='/delete-account' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><DeleteAccount /></Suspense>} />
 
                         <Route path='/rate-us' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><RateUs /></Suspense>} />
 

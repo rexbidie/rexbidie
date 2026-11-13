@@ -17,6 +17,7 @@ import {
     shouldOfferBiometric,
 } from '../native/biometric';
 import * as haptics from '../native/haptics';
+import { isNativeApp } from '../native/platform';
 
 const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
@@ -69,7 +70,7 @@ const Login = () => {
         }
         setIsLoading(true);
         try {
-            const data = await login({ email: creds.email, password: creds.password });
+            const data = await login({ email: creds.email, password: creds.password, rememberMe: true });
             if (data?.success) {
                 haptics.bidPlaced();
                 toast.success(data.message);
@@ -88,6 +89,7 @@ const Login = () => {
         defaultValues: {
             email: '',
             password: '',
+            rememberMe: false,
         }
     });
 
@@ -98,7 +100,9 @@ const Login = () => {
             // Convert email to lowercase before sending to API
             const normalizedLoginData = {
                 ...loginData,
-                email: loginData.email.toLowerCase().trim()
+                email: loginData.email.toLowerCase().trim(),
+                // Always kept signed in inside the app.
+                rememberMe: isNativeApp ? true : !!loginData.rememberMe,
             };
 
             const offerBio = bio.available && shouldOfferBiometric(normalizedLoginData.email);
@@ -232,8 +236,18 @@ const Login = () => {
                             </div>
                         </div>
 
-                        {/* Forgot Password */}
-                        <div className="flex justify-between items-center">
+                        {/* Keep me signed in (website only: the app always stays signed in) / Forgot Password */}
+                        <div className="flex justify-between items-center gap-3">
+                            {!isNativeApp && (
+                                <label className="inline-flex items-center gap-2 text-sm text-secondary cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-gray-300 accent-[#D19F3E]"
+                                        {...register('rememberMe')}
+                                    />
+                                    Keep me signed in
+                                </label>
+                            )}
                             <button
                                 type='button'
                                 onClick={() => setShowForgotPasswordModal(true)}

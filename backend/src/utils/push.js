@@ -4,6 +4,20 @@ import mongoose from "mongoose";
 import Device from "../models/device.model.js";
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
+import { wantsCategory } from "./emailPreferences.js";
+
+/**
+ * Push type → the category users can switch off (Profile → Notifications).
+ * Types not listed (won, sold, payments, paid out) are always pushed.
+ * Everything is still saved to the in-app inbox.
+ */
+export const PUSH_CATEGORY = {
+    outbid: "bidding",
+    endingSoon: "reminders",
+    buyItNow: "buyItNow",
+    newQuestion: "questions",
+    questionAnswered: "questions",
+};
 
 /**
  * App notifications: saved to the in-app inbox and, when Firebase is set up,
@@ -134,6 +148,12 @@ export const notify = async ({ user, userId, email, type, title, body = "", url 
         } catch (err) {
             if (err?.code === 11000) return null; // already notified
             throw err;
+        }
+
+        const category = PUSH_CATEGORY[type];
+        if (category) {
+            const prefs = await User.findById(id).select("preferences").lean();
+            if (prefs && !wantsCategory(prefs, category, "push")) return saved;
         }
 
         const badge = await Notification.countDocuments({ user: id, readAt: null }).catch(() => undefined);

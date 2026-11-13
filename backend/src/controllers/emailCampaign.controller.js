@@ -82,6 +82,7 @@ const buildRecipientQuery = (recipients) => {
     const baseFilter = {
         isActive: true,
         "preferences.emailUpdates": { $ne: false },
+        "preferences.email.news": { $ne: false },
         userType: { $nin: EXCLUDED_USER_TYPES },
     };
 

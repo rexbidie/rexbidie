@@ -251,7 +251,7 @@ const Register = () => {
             setIsLoading(true);
             const { data } = await axios.post(
                 `${import.meta.env.VITE_DOMAIN_URL}/api/v1/users/register`,
-                { registrationToken: token, setupIntentId, gaClientId: getGaClientId() },
+                { registrationToken: token, setupIntentId, gaClientId: getGaClientId(), rememberMe: isNativeApp },
                 { withCredentials: true }
             );
 
@@ -301,6 +301,7 @@ const Register = () => {
             formData.append('firstName', registrationData.firstName);
             formData.append('lastName', registrationData.lastName);
             formData.append('email', registrationData.email);
+            formData.append('rememberMe', String(isNativeApp));
             formData.append('phone', registrationData.phone);
             formData.append('password', registrationData.password);
             formData.append('username', registrationData.username);
