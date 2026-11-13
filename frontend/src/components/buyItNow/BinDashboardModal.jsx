@@ -5,7 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 import BinManage from "./BinManage";
 
-// Seller dashboard: set up or manage Buy It Now after the auction for one lot.
+// Seller dashboard: set up or manage Last Chance after the auction for one lot.
 const BinDashboardModal = ({ auction, onClose }) => {
     useBodyScrollLock(!!auction);
     const { user } = useAuth();
@@ -18,7 +18,7 @@ const BinDashboardModal = ({ auction, onClose }) => {
             const { data } = await axiosInstance.get(`/api/v1/buy-it-now/lot/${auction._id}?currency=${user?.currency || "EUR"}`);
             setInfo(data.data);
         } catch (err) {
-            setError(err.response?.data?.message || "Could not load Buy It Now");
+            setError(err.response?.data?.message || "Could not load Last Chance");
         }
     }, [auction?._id, user?.currency]);
 
@@ -30,7 +30,7 @@ const BinDashboardModal = ({ auction, onClose }) => {
             <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl p-5 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-start justify-between gap-4 mb-3">
                     <div>
-                        <h2 id="bin-dash-title" className="text-lg font-semibold">Buy It Now (48 hours)</h2>
+                        <h2 id="bin-dash-title" className="text-lg font-semibold">Last Chance (48 hours)</h2>
                         <p className="text-sm text-gray-600">{auction.title}</p>
                     </div>
                     <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-gray-500 hover:text-black"><X size={20} /></button>
@@ -44,7 +44,7 @@ const BinDashboardModal = ({ auction, onClose }) => {
                 )}
                 <ul className="mt-4 text-xs text-gray-500 list-disc pl-5 space-y-1">
                     <li>For lots with a reserve. The price must be at least 10% below your reserve and above the top bid.</li>
-                    <li>The lot is on the public Buy It Now page for 48 hours. Bidders, watchers and people who asked about it are told.</li>
+                    <li>The lot is on the public Last Chance page for 48 hours. Bidders, watchers and people who asked about it are told.</li>
                     <li>The first buyer to confirm buys it, and the sale follows the normal RexBid process.</li>
                 </ul>
             </div>

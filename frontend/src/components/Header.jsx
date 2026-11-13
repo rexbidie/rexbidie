@@ -29,8 +29,8 @@ const navLinks = [
         href: '/auctions'
     },
     {
-        name: 'Buy It Now',
-        href: '/buy-it-now'
+        name: 'Last Chance',
+        href: '/last-chance'
     },
 ];
 

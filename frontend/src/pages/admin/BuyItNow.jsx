@@ -1,8 +1,8 @@
-// Admin → Buy It Now.
+// Admin → Last Chance.
 // 1. Invite the sellers of unsold reserve lots (e.g. last night's sale) to put
-//    them on Buy It Now: preview the exact email, send yourself a test, then
+//    them on Last Chance: preview the exact email, send yourself a test, then
 //    send. Nothing goes to sellers until you press Send and confirm.
-// 2. See what is live on Buy It Now right now.
+// 2. See what is live on Last Chance right now.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, Loader2, Mail, RefreshCw, Send, Undo2, X } from "lucide-react";
@@ -67,7 +67,7 @@ const UndoModal = ({ lot, onClose, onDone }) => {
         <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="undo-title">
             <div className="bg-white rounded-xl w-full max-w-lg p-5">
                 <div className="flex items-start justify-between gap-4">
-                    <h2 id="undo-title" className="text-lg font-semibold">Undo Buy It Now purchase</h2>
+                    <h2 id="undo-title" className="text-lg font-semibold">Undo Last Chance purchase</h2>
                     <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-gray-500 hover:text-black"><X size={20} /></button>
                 </div>
                 <p className="text-sm text-gray-700 mt-1"><strong>{lot.title}</strong>, bought by {lot.buyer?.name} ({lot.buyer?.email}) for {money(lot.price, lot.currency)}.</p>
@@ -79,11 +79,11 @@ const UndoModal = ({ lot, onClose, onDone }) => {
                 <input id="undo-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
                 <label className="flex items-start gap-2 mt-4 text-sm">
                     <input type="checkbox" checked={relist} onChange={(e) => setRelist(e.target.checked)} className="mt-1" />
-                    <span>Put it back on Buy It Now for the time it had left (at least 24 hours)</span>
+                    <span>Put it back on Last Chance for the time it had left (at least 24 hours)</span>
                 </label>
                 <label className="flex items-start gap-2 mt-2 text-sm">
                     <input type="checkbox" checked={notifySeller} onChange={(e) => setNotifySeller(e.target.checked)} className="mt-1" />
-                    <span>Email the seller ({lot.seller?.email}) that the sale was cancelled in error and to ignore the "item sold" email{relist ? ", and that the lot is back on Buy It Now" : ""}</span>
+                    <span>Email the seller ({lot.seller?.email}) that the sale was cancelled in error and to ignore the "item sold" email{relist ? ", and that the lot is back on Last Chance" : ""}</span>
                 </label>
                 <div className="mt-5 flex justify-end gap-2">
                     <button type="button" onClick={onClose} className="px-4 py-2 border rounded-md text-sm">Cancel</button>
@@ -169,7 +169,7 @@ function AdminBuyItNow() {
     };
 
     const send = async () => {
-        if (!window.confirm(`Send the Buy It Now invitation to ${sellerCount} seller${sellerCount === 1 ? "" : "s"} now? Each gets one email covering their lots, and 72 hours from now to start Buy It Now.`)) return;
+        if (!window.confirm(`Send the Last Chance invitation to ${sellerCount} seller${sellerCount === 1 ? "" : "s"} now? Each gets one email covering their lots, and 72 hours from now to start Last Chance.`)) return;
         setBusy("send");
         try {
             const { data } = await axiosInstance.post("/api/v1/buy-it-now/admin/invite/send", { auctionIds: ids, confirm: true });
@@ -191,14 +191,14 @@ function AdminBuyItNow() {
                 <AdminHeader />
                 <AdminContainer>
                     <div className="pt-16 md:pt-0 pb-10 max-w-6xl">
-                        <h1 className="text-3xl font-bold my-5">Buy It Now</h1>
+                        <h1 className="text-3xl font-bold my-5">Last Chance</h1>
 
                         <div className="bg-white border border-gray-200 rounded-lg p-5">
                             <div className="flex flex-wrap items-end justify-between gap-3">
                                 <div>
                                     <h2 className="text-lg font-semibold">Invite sellers of unsold lots</h2>
                                     <p className="text-sm text-gray-600 max-w-2xl">
-                                        Reserve lots that ended without meeting the reserve. Each seller gets one email listing their lots, with a link to set a Buy It Now price and a link to the Buy It Now page.
+                                        Reserve lots that ended without meeting the reserve. Each seller gets one email listing their lots, with a link to set a Last Chance price and a link to the Last Chance page.
                                         Sending gives them 72 hours from now to start it.
                                     </p>
                                 </div>
@@ -225,7 +225,7 @@ function AdminBuyItNow() {
                                                     <th className="py-2 pr-4">Lot</th>
                                                     <th className="py-2 pr-4">Seller</th>
                                                     <th className="py-2 pr-4 text-right">Top bid</th>
-                                                    <th className="py-2 pr-4 text-right">Max Buy It Now</th>
+                                                    <th className="py-2 pr-4 text-right">Max Last Chance</th>
                                                     <th className="py-2">Status</th>
                                                 </tr>
                                             </thead>
@@ -277,9 +277,9 @@ function AdminBuyItNow() {
                         </div>
 
                         <div className="bg-white border border-gray-200 rounded-lg p-5 mt-6">
-                            <h2 className="text-lg font-semibold">Bought on Buy It Now (last 14 days)</h2>
+                            <h2 className="text-lg font-semibold">Bought on Last Chance (last 14 days)</h2>
                             {sold.length === 0 ? (
-                                <p className="text-sm text-gray-500 mt-2">No Buy It Now sales yet.</p>
+                                <p className="text-sm text-gray-500 mt-2">No Last Chance sales yet.</p>
                             ) : (
                                 <ul className="mt-3 divide-y text-sm">
                                     {sold.map((l) => (
@@ -304,7 +304,7 @@ function AdminBuyItNow() {
                         </div>
 
                         <div className="bg-white border border-gray-200 rounded-lg p-5 mt-6">
-                            <h2 className="text-lg font-semibold">Live on Buy It Now</h2>
+                            <h2 className="text-lg font-semibold">Live on Last Chance</h2>
                             {live.length === 0 ? (
                                 <p className="text-sm text-gray-500 mt-2">Nothing is live right now.</p>
                             ) : (

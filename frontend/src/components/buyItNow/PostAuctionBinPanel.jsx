@@ -46,13 +46,13 @@ export const ConfirmModal = ({ open, onClose, info, auction, onBought, buyUrl })
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="bin-confirm-title">
             <div className="bg-white w-full sm:max-w-md rounded-t-xl sm:rounded-xl p-5 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-start justify-between gap-4">
-                    <h2 id="bin-confirm-title" className="text-lg font-semibold">Confirm Buy It Now</h2>
+                    <h2 id="bin-confirm-title" className="text-lg font-semibold">Confirm purchase</h2>
                     <button type="button" onClick={() => onClose(false)} aria-label="Close" className="p-1 text-gray-500 hover:text-black"><X size={20} /></button>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">{auction.title}</p>
 
                 <dl className="mt-4 text-sm divide-y divide-gray-100 border-y border-gray-100">
-                    <div className="flex justify-between py-2"><dt>Buy It Now price</dt><dd className="font-semibold">{money(info.price, cur)}{auction.vatIncluded ? " + VAT" : ""}</dd></div>
+                    <div className="flex justify-between py-2"><dt>Price</dt><dd className="font-semibold">{money(info.price, cur)}{auction.vatIncluded ? " + VAT" : ""}</dd></div>
                     <div className="flex justify-between py-2">
                         <dt>Buyer fee</dt>
                         <dd>{fee != null ? money(fee, cur) : buyerFeeShort}</dd>
@@ -80,7 +80,7 @@ export const ConfirmModal = ({ open, onClose, info, auction, onBought, buyUrl })
                     className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-[#edcd1f] text-black font-semibold rounded-lg py-3 disabled:opacity-50"
                 >
                     {buying ? <Loader size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-                    Buy it now for {money(info.price, cur)}
+                    Buy now for {money(info.price, cur)}
                 </button>
             </div>
         </div>
@@ -135,7 +135,7 @@ const PostAuctionBinPanel = ({ auction, onPurchased }) => {
 
     return (
         <div className="my-4 rounded-lg border-2 border-[#edcd1f] bg-white p-4">
-            <p className="text-xs uppercase tracking-wide font-semibold text-gray-600">Buy It Now · after the auction</p>
+            <p className="text-xs uppercase tracking-wide font-semibold text-gray-600">Last Chance · fixed price after the auction</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
                 {money(info.price, info.displayCurrency)}
                 {auction.vatIncluded && <span className="text-sm font-normal text-gray-500 ml-1">+ VAT</span>}
@@ -148,13 +148,13 @@ const PostAuctionBinPanel = ({ auction, onPurchased }) => {
                 onClick={start}
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-[#edcd1f] text-black font-semibold rounded-lg py-3 hover:bg-[#edcd1f]/90"
             >
-                <ShoppingCart size={18} /> Buy It Now
+                <ShoppingCart size={18} /> Buy now
             </button>
             <p className="text-xs text-gray-500 mt-3 flex items-start gap-1.5">
                 <ShieldCheck size={14} className="mt-0.5 flex-shrink-0 text-green-700" />
                 The auction didn't reach the seller's reserve, so they're offering it at this fixed price. Buyer fee applies ({buyerFeeShort}). Paid and collected through RexBid.
             </p>
-            <Link to="/buy-it-now" className="text-xs underline text-gray-600 mt-2 inline-block">See everything on Buy It Now</Link>
+            <Link to="/last-chance" className="text-xs underline text-gray-600 mt-2 inline-block">See everything on Last Chance</Link>
 
             <ConfirmModal
                 open={open}

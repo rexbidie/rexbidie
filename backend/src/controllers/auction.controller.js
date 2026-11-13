@@ -4709,3 +4709,135 @@ export const confirmListingPromotion = async (req, res) => {
     res.json({ success: true, message: "Payment received. Your promotion is on." });
   } catch (error) { promoFail(res, error); }
 };
+
+/**
+ * @desc    Set, change or remove the Buy It Now price on a reserve auction from
+ *          the dashboard. Applies straight away (no approval). Rules:
+ *          utils/liveBuyNow.js (15% above reserve; after bids only lower,
+ *          add or remove; not once Buy It Now has closed on the lot).
+ * @route   PATCH /api/v1/auctions/:id/live-buy-now-price  { price }  (0 / empty removes)
+ * @access  Private (seller)
+ */
+export const setLiveBuyNowPrice = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
+    if (auction.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+    if (auction.auctionType !== "reserve") {
+      return res.status(400).json({ success: false, message: "Buy It Now during the auction is only available on reserve auctions." });
+    }
+    if (!["draft", "approved", "active", "awaiting_payment"].includes(auction.status) || auction.winner) {
+      return res.status(400).json({ success: false, message: "Buy It Now can only be set before the auction ends." });
+    }
+    if (auction.liveBuyNow?.status === "processing" || auction.liveBuyNow?.status === "sold") {
+      return res.status(409).json({ success: false, message: "This lot is being bought on Buy It Now right now." });
+    }
+
+    const raw = req.body?.price;
+    const price = raw === null || raw === "" || raw === undefined ? 0 : Number(raw);
+    const removing = !price;
+    if (!removing && (!Number.isFinite(price) || price <= 0 || Math.round(price) !== price)) {
+      return res.status(400).json({ success: false, message: "Enter the Buy It Now price as a whole amount." });
+    }
+
+    if (!removing) {
+      const err = livePriceError({
+        auctionType: auction.auctionType,
+        reservePrice: auction.reservePrice,
+        price,
+        previous: auction.liveBuyNow?.price,
+        bidCount: auction.bidCount,
+      });
+      if (err) return res.status(400).json({ success: false, message: err });
+      // Once Buy It Now has closed on a live lot it stays closed.
+      if (auction.status === "active") {
+        const state = liveBuyNowState({ ...auction.toObject(), liveBuyNow: { price, status: null } });
+        if (!state.available && ["closing_soon", "bidding_close_to_reserve"].includes(state.reason)) {
+          return res.status(400).json({
+            success: false,
+            message: state.reason === "closing_soon"
+              ? "Buy It Now can't be set in the last 12 hours of the auction."
+              : "Bidding has reached 90% of your reserve, so Buy It Now can't be set on this lot.",
+          });
+        }
+      }
+    }
+
+    // Only if no bid or purchase landed in the meantime.
+    const updated = await Auction.findOneAndUpdate(
+      {
+        _id: auction._id,
+        bidCount: auction.bidCount,
+        currentPrice: auction.currentPrice,
+        "liveBuyNow.status": { $nin: ["processing", "sold"] },
+      },
+      { $set: { "liveBuyNow.price": removing ? null : price } },
+      { new: true }
+    );
+    if (!updated) return res.status(409).json({ success: false, message: "The lot has just changed. Please refresh and try again." });
+    broadcastAuctionChange(auction._id);
+    res.json({
+      success: true,
+      message: removing ? "Buy It Now price removed." : "Buy It Now price saved. Buyers can now buy this lot outright while it's open.",
+      data: { liveBuyNow: updated.liveBuyNow },
+    });
+  } catch (error) {
+    console.error("Set live Buy It Now price error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * @desc    Lower the starting bid before the first bid. Applies straight away
+ *          (no approval). Must stay within the listing minimums
+ *          (utils/listingRules.js: no-reserve auctions start at €400 or the
+ *          sterling equivalent).
+ * @route   PATCH /api/v1/auctions/:id/start-price  { startPrice }
+ * @access  Private (seller)
+ */
+export const lowerStartPrice = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
+    if (auction.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+    if (!["standard", "reserve"].includes(auction.auctionType)) {
+      return res.status(400).json({ success: false, message: "Only auctions have a starting bid." });
+    }
+    if (!["draft", "approved", "active", "awaiting_payment"].includes(auction.status) || auction.winner) {
+      return res.status(400).json({ success: false, message: "The starting bid can only be changed before the auction ends." });
+    }
+    if (Number(auction.bidCount) > 0) {
+      return res.status(400).json({ success: false, message: "The starting bid can't be changed once bidding has started." });
+    }
+    const next = Number(req.body?.startPrice);
+    if (!Number.isFinite(next) || next <= 0 || Math.round(next) !== next) {
+      return res.status(400).json({ success: false, message: "Enter the starting bid as a whole amount." });
+    }
+    if (next >= Number(auction.startPrice)) {
+      return res.status(400).json({ success: false, message: "The new starting bid must be lower than the current one." });
+    }
+    const minErr = minimumPriceError({
+      auctionType: auction.auctionType,
+      startPrice: next,
+      reservePrice: auction.reservePrice,
+      currency: auction.baseCurrency || "EUR",
+    });
+    if (minErr) return res.status(400).json({ success: false, message: minErr });
+
+    const updated = await Auction.findOneAndUpdate(
+      { _id: auction._id, bidCount: 0, startPrice: auction.startPrice },
+      { $set: { startPrice: next, currentPrice: next, basePrice: next } },
+      { new: true }
+    );
+    if (!updated) return res.status(409).json({ success: false, message: "A bid has just been placed. Please refresh." });
+    broadcastAuctionChange(auction._id);
+    res.json({ success: true, message: "Starting bid lowered.", data: { startPrice: updated.startPrice } });
+  } catch (error) {
+    console.error("Lower start price error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

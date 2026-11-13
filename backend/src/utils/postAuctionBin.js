@@ -1,7 +1,7 @@
-// Buy It Now after the auction (Nov 2026).
+// Last Chance after the auction (Nov 2026).
 //
 // When a reserve lot ends without meeting its reserve, the seller can offer it
-// at a fixed price for 48 hours on the public Buy It Now page. Rules:
+// at a fixed price for 48 hours on the public Last Chance page. Rules:
 //   - the price must be at least 10% below the original reserve
 //   - the price must be above the highest bid (otherwise the seller should
 //     sell to the top bidder instead)
@@ -26,7 +26,7 @@ export const topBidOf = (auction) => (Number(auction?.bidCount) > 0 || (auction?
   : 0;
 
 /**
- * Checks a proposed Buy It Now price (in the lot's own currency).
+ * Checks a proposed Last Chance price (in the lot's own currency).
  * @param {object} auction raw auction
  * @param {number} price
  * @param {{ atEnd?: boolean }} opts atEnd: the auction has finished, so the top bid is final
@@ -34,57 +34,57 @@ export const topBidOf = (auction) => (Number(auction?.bidCount) > 0 || (auction?
  */
 export const binPriceError = (auction, price, { atEnd = true } = {}) => {
   if (!auction || auction.auctionType !== "reserve" || !(Number(auction.reservePrice) > 0)) {
-    return "Buy It Now after the auction is only available for lots with a reserve.";
+    return "Last Chance after the auction is only available for lots with a reserve.";
   }
   const p = round2(Number(price));
   if (!Number.isFinite(p) || p <= 0) return "Please enter a price.";
 
   const max = maxBinPrice(auction.reservePrice);
   if (p > max) {
-    return `The Buy It Now price must be at least 10% below your reserve, so no more than ${max.toLocaleString("en-IE")}.`;
+    return `The Last Chance price must be at least 10% below your reserve, so no more than ${max.toLocaleString("en-IE")}.`;
   }
   const minStart = Number(auction.startPrice) || 0;
-  if (p < minStart) return `The Buy It Now price can't be below the starting price (${minStart.toLocaleString("en-IE")}).`;
+  if (p < minStart) return `The Last Chance price can't be below the starting price (${minStart.toLocaleString("en-IE")}).`;
 
   if (atEnd) {
     const top = topBidOf(auction);
     if (top > 0 && max <= top) {
-      return "The top bid is already within 10% of your reserve, so Buy It Now isn't available. Contact RexBid if you'd like to sell to the top bidder.";
+      return "The top bid is already within 10% of your reserve, so Last Chance isn't available. Contact RexBid if you'd like to sell to the top bidder.";
     }
     if (top > 0 && p <= top) {
-      return `The Buy It Now price must be higher than the top bid (${top.toLocaleString("en-IE")}).`;
+      return `The Last Chance price must be higher than the top bid (${top.toLocaleString("en-IE")}).`;
     }
   }
   return null;
 };
 
-/** Latest time the seller can start Buy It Now after the auction. */
+/** Latest time the seller can start Last Chance after the auction. */
 export const startDeadlineFor = (auction) => {
   const byEnd = new Date(new Date(auction?.endDate || 0).getTime() + START_WINDOW_HOURS * 36e5);
   const extra = auction?.postAuctionBin?.startDeadline ? new Date(auction.postAuctionBin.startDeadline) : null;
   return extra && extra > byEnd ? extra : byEnd;
 };
 
-/** Can the seller start (or schedule) Buy It Now on this lot right now? */
+/** Can the seller start (or schedule) Last Chance on this lot right now? */
 export const binStartState = (auction, now = new Date()) => {
-  if (!auction || auction.auctionType !== "reserve") return { allowed: false, mode: null, reason: "Only lots with a reserve can use Buy It Now after the auction." };
+  if (!auction || auction.auctionType !== "reserve") return { allowed: false, mode: null, reason: "Only lots with a reserve can use Last Chance after the auction." };
   const bin = auction.postAuctionBin || {};
   if (["live", "sold", "expired", "cancelled"].includes(bin.status)) {
-    return { allowed: false, mode: null, reason: "Buy It Now has already been used for this lot." };
+    return { allowed: false, mode: null, reason: "Last Chance has already been used for this lot." };
   }
   if (["draft", "approved", "active"].includes(auction.status)) {
     return { allowed: true, mode: "schedule" };
   }
   if (auction.status === "reserve_not_met") {
     if (now.getTime() > startDeadlineFor(auction).getTime()) {
-      return { allowed: false, mode: null, reason: `Buy It Now has to be started within ${START_WINDOW_HOURS} hours of the auction ending. You can relist the lot instead.` };
+      return { allowed: false, mode: null, reason: `Last Chance has to be started within ${START_WINDOW_HOURS} hours of the auction ending. You can relist the lot instead.` };
     }
     return { allowed: true, mode: "start" };
   }
-  return { allowed: false, mode: null, reason: "Buy It Now isn't available for this lot." };
+  return { allowed: false, mode: null, reason: "Last Chance isn't available for this lot." };
 };
 
-/** Is the lot on Buy It Now right now? */
+/** Is the lot on Last Chance right now? */
 export const binIsLive = (auction, now = new Date()) =>
   auction?.status === "reserve_not_met" &&
   !auction?.winner &&

@@ -4,7 +4,7 @@ import { toast } from "react-hot-toast";
 import axiosInstance from "../../utils/axiosInstance";
 import { money, timeLeft } from "./binShared";
 
-// Seller (or RexBid staff) controls for Buy It Now after the auction.
+// Seller (or RexBid staff) controls for Last Chance after the auction.
 // Used on the listing page and in the dashboard modal.
 // `info` is the response of GET /api/v1/buy-it-now/lot/:id (with `manage`).
 
@@ -37,7 +37,7 @@ const BinManage = ({ auctionId, info, onChanged }) => {
         if (info.live) {
             call("patch", `/api/v1/buy-it-now/lot/${auctionId}/price`, { price: Number(price), currency: cur });
         } else {
-            if (m.mode === "start" && !window.confirm(`Put this lot on Buy It Now at ${money(price, cur)} for 48 hours? The first buyer to confirm buys it.`)) return;
+            if (m.mode === "start" && !window.confirm(`Put this lot on Last Chance at ${money(price, cur)} for 48 hours? The first buyer to confirm buys it.`)) return;
             call("post", `/api/v1/buy-it-now/lot/${auctionId}/setup`, { price: Number(price), currency: cur });
         }
     };
@@ -75,25 +75,25 @@ const BinManage = ({ auctionId, info, onChanged }) => {
 
     return (
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            <p className="font-semibold text-gray-900">Buy It Now after the auction</p>
+            <p className="font-semibold text-gray-900">Last Chance after the auction</p>
 
             {info.live ? (
                 <>
                     <p className="mt-1">
-                        On Buy It Now at <strong>{money(m.livePrice, cur)}</strong> · {timeLeft(info.endsAt)}. We've told the bidders, watchers and everyone who asked about it.
+                        On Last Chance at <strong>{money(m.livePrice, cur)}</strong> · {timeLeft(info.endsAt)}. We've told the bidders, watchers and everyone who asked about it.
                     </p>
                     {priceInput("Lower the price (optional)", `Must be lower than ${money(m.livePrice, cur)}${m.topBid ? ` and more than the top bid of ${money(m.topBid, cur)}` : ""}.`)}
                 </>
             ) : info.status === "sold" ? (
-                <p className="mt-1">Sold on Buy It Now at {money(info.price, cur)}.</p>
+                <p className="mt-1">Sold on Last Chance at {money(info.price, cur)}.</p>
             ) : info.status === "expired" ? (
-                <p className="mt-1">Buy It Now ended without a sale. You can relist the lot from your dashboard.</p>
+                <p className="mt-1">Last Chance ended without a sale. You can relist the lot from your dashboard.</p>
             ) : m.blockedByTopBid ? (
-                <p className="mt-1">The top bid is already within 10% of your reserve, so Buy It Now isn't available. Contact RexBid if you'd like to sell to the top bidder.</p>
+                <p className="mt-1">The top bid is already within 10% of your reserve, so Last Chance isn't available. Contact RexBid if you'd like to sell to the top bidder.</p>
             ) : m.scheduledPrice ? (
                 <>
                     <p className="mt-1">
-                        If the reserve isn't met, this lot goes on Buy It Now for 48 hours at <strong>{money(m.scheduledPrice, cur)}</strong>.
+                        If the reserve isn't met, this lot goes on Last Chance for 48 hours at <strong>{money(m.scheduledPrice, cur)}</strong>.
                     </p>
                     <button
                         type="button"
@@ -109,12 +109,12 @@ const BinManage = ({ auctionId, info, onChanged }) => {
                 m.mode === "start" ? (
                     <>
                         <p className="mt-1">Your reserve wasn't met. Offer the lot at a fixed price for 48 hours. We'll tell the bidders, watchers and everyone who asked about it, and the first buyer to confirm buys it.</p>
-                        {priceInput("Buy It Now price", limits ? `${limits}.` : null)}
+                        {priceInput("Last Chance price", limits ? `${limits}.` : null)}
                     </>
                 ) : (
                     <>
-                        <p className="mt-1">Set a backup price now. If the reserve isn't met, the lot goes straight onto Buy It Now for 48 hours.</p>
-                        {priceInput("Backup Buy It Now price", limits ? `${limits}. It must also beat the final top bid.` : null)}
+                        <p className="mt-1">Set a backup price now. If the reserve isn't met, the lot goes straight onto Last Chance for 48 hours.</p>
+                        {priceInput("Backup Last Chance price", limits ? `${limits}. It must also beat the final top bid.` : null)}
                     </>
                 )
             ) : (

@@ -5,7 +5,7 @@ import { money, timeLeft } from "../buyItNow/binShared";
 import { useNow } from "../buyItNow/useNow";
 
 /**
- * Shown at the very top of the homepage while any lot is on Buy It Now
+ * Shown at the very top of the homepage while any lot is on Last Chance
  * (after the auction, 48 hours). Ending soonest first; hidden when nothing is live.
  */
 function HomeBuyItNow({ lots }) {
@@ -23,11 +23,11 @@ function HomeBuyItNow({ lots }) {
                             <p className="inline-flex items-center gap-1.5 rounded-full bg-[#D19F3E] px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#072342]">
                                 <Clock size={12} /> 48 hours only
                             </p>
-                            <h2 id="home-bin-heading" className="mt-2 text-[1.6rem] font-bold text-white md:text-2xl">Buy It Now</h2>
+                            <h2 id="home-bin-heading" className="mt-2 text-[1.6rem] font-bold text-white md:text-2xl">Last Chance</h2>
                             <p className="text-base text-gray-300 md:text-sm">Missed their reserve, now at a fixed price at least 10% below it. First buyer gets it.</p>
                         </div>
                         <Link
-                            to="/buy-it-now"
+                            to="/last-chance"
                             className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-[#D19F3E] px-5 py-2.5 text-base font-semibold text-[#072342] transition hover:bg-[#E8B86B] sm:w-auto"
                         >
                             See All {live.length} <ArrowRight size={18} />
@@ -54,7 +54,7 @@ function HomeBuyItNow({ lots }) {
                                                 {lot.vatIncluded && <span className="ml-1 text-[11px] font-normal text-gray-500">+ VAT</span>}
                                             </p>
                                             <span className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#edcd1f] py-2.5 text-sm font-semibold text-black md:py-1.5 md:text-xs">
-                                                <ShoppingCart size={14} /> Buy It Now
+                                                <ShoppingCart size={14} /> Last Chance
                                             </span>
                                         </div>
                                     </Link>

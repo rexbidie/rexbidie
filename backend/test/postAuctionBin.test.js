@@ -1,4 +1,4 @@
-// Buy It Now after the auction – pricing rules and public data.
+// Last Chance after the auction – pricing rules and public data.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { binIsLive, binPriceError, binStartState, maxBinPrice, topBidOf } from "../src/utils/postAuctionBin.js";
@@ -81,15 +81,15 @@ test("an admin invitation gives the seller a fresh 72 hours", async () => {
   assert.ok(startDeadlineFor(invited) > new Date());
 });
 
-test("seller invite email lists each lot and links to Buy It Now", async () => {
+test("seller invite email lists each lot and links to Last Chance", async () => {
   const { renderBinInviteEmail } = await import("../src/utils/nodemailer.js");
   const { subject, html } = renderBinInviteEmail(
     { firstName: "Pat", userType: "seller" },
     [{ _id: "a1", title: "MF 5613 <tractor>", currency: "EUR", topBid: 15000, maxPrice: 18000 }],
     { deadline: new Date("2026-11-14T18:00:00Z") }
   );
-  assert.match(subject, /Buy It Now/);
-  assert.match(html, /\/buy-it-now/);
+  assert.match(subject, /Last Chance/);
+  assert.match(html, /\/last-chance/);
   assert.match(html, /\/seller\/auctions\/all/);
   assert.match(html, /MF 5613 &lt;tractor&gt;/);
   assert.match(html, /€18,000/);
