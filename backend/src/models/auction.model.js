@@ -190,6 +190,23 @@ const auctionSchema = new Schema(
     // (services/listingEditService.js). The listing keeps its current details
     // until it's approved. status: pending, or rejected (with a note for the seller).
     pendingEdit: { type: Schema.Types.Mixed, default: null },
+
+    // Featured / Meta Boost bought after the listing was created (3-dot menu,
+    // services/listingPromotionService.js). Extras chosen when listing are in extrasPayment.
+    promotions: [
+      {
+        kind: { type: String, enum: ["featured", "meta", "featured_meta"] },
+        featured: { type: Boolean, default: false },
+        metaBoostPackage: { type: String, default: null },
+        amount: Number,
+        currency: { type: String, enum: ["EUR", "GBP"], default: "EUR" },
+        lineItems: [{ _id: false, id: String, label: String, amount: Number }],
+        status: { type: String, enum: ["pending", "completed", "failed"], default: "pending" },
+        paymentIntentId: String,
+        createdAt: Date,
+        paidAt: Date,
+      },
+    ],
     lastEditApprovedAt: Date,
     lastEditApprovedBy: { type: Schema.Types.ObjectId, ref: "User" },
 

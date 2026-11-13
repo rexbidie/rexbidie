@@ -1305,6 +1305,30 @@ const listingEditedAdminEmail = async (adminEmail, auction, seller, changedLabel
     return !!info;
 };
 
+/** Admin: a seller bought Featured / Meta Boost for a listing. */
+const listingPromotionAdminEmail = async (adminEmail, auction, promo) => {
+    const sym = promo.currency === "GBP" ? "£" : "€";
+    const items = (promo.lineItems || []).map((l) => `${escHtml(l.label)}: ${sym}${l.amount}`).join("<br>");
+    const content = `
+            <h2 style="text-align: center;">Listing Promotion Paid</h2>
+            ${createInfoCard(`
+                ${createSummaryRow('Listing:', escHtml(auction.title))}
+                ${createSummaryRow('Bought:', items)}
+                ${createSummaryRow('Total:', `${sym}${promo.amount}`)}
+            `)}
+            ${promo.featured ? '<p>Featured is on: the listing now shows in Featured Ads.</p>' : ''}
+            ${promo.metaBoostPackage ? `<p><strong>Action needed:</strong> set up the Meta Boost (${escHtml(promo.metaBoostPackage)}) for this listing.</p>` : ''}
+            <div style="text-align: center; margin: 25px 0;">${createButton('View listing', `${FRONTEND_URL}/auction/${auction._id}`, 'primary')}</div>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: adminEmail,
+        subject: `${promo.metaBoostPackage ? "Meta Boost to set up" : "Featured ad paid"} - ${auction.title}`,
+        html: baseTemplate(content, 'Promotion Paid'),
+    });
+    return !!info;
+};
+
 /** Seller: their edit was approved, or sent back with a note. */
 const listingEditDecisionEmail = async (sellerEmail, sellerName, auction, { approved, note } = {}) => {
     const content = approved ? `
@@ -4635,6 +4659,7 @@ export {
     accountDeletedEmail,
     listingEditedAdminEmail,
     listingEditDecisionEmail,
+    listingPromotionAdminEmail,
     liveBuyNowBidderEmail,
     renderBinInviteEmail,
     sendBinInviteEmail,

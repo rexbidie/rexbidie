@@ -35,6 +35,7 @@ import { livePriceError, liveBuyNowState } from "../utils/liveBuyNow.js";
 import { minIncrementFor, incrementChangeError, incrementBasis } from "../utils/listingRules.js";
 import { buyLive } from "../services/liveBuyNowService.js";
 import { submitWithoutExtras } from "../services/listingExtrasService.js";
+import { confirmPromotion, promotionOptions, startPromotion } from "../services/listingPromotionService.js";
 import { HOLD_EDIT_STATUSES, holdEditForApproval, changedFields, fileIds, deleteFiles, notifyAdminsOfResubmission, discardEdit } from "../services/listingEditService.js";
 import { getExtrasPricingMenu } from "../utils/listingExtras.js";
 
@@ -3964,12 +3965,11 @@ export const markAsFeatured = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Auction cannot be featured in its current state' });
     }
 
-    if (auction.isFeatured) {
-      return res.status(400).json({ success: false, message: 'Auction is already featured' });
-    }
-
-    auction.isFeatured = true;
-    await auction.save();
+    // Featuring is paid now: the 3-dot menu's "Feature this ad" (POST /:id/promote).
+    return res.status(410).json({
+      success: false,
+      message: 'Featuring is now a paid option. Use "Feature this ad" in the listing menu.',
+    });
 
     res.status(200).json({
       success: true,
@@ -4668,4 +4668,44 @@ export const discardPendingEdit = async (req, res) => {
     if (!error?.status) console.error("Discard edit error:", error);
     res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Internal server error" });
   }
+};
+
+const ownLot = async (req, res) => {
+  const auction = await Auction.findById(req.params.id);
+  if (!auction) { res.status(404).json({ success: false, message: "Listing not found" }); return null; }
+  if (auction.seller.toString() !== req.user._id.toString()) { res.status(403).json({ success: false, message: "Not authorized" }); return null; }
+  return auction;
+};
+const promoFail = (res, error) => {
+  if (!error?.status) console.error("Listing promotion error:", error);
+  res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Could not start the payment. Please try again." });
+};
+
+/** GET /api/v1/auctions/:id/promote: what can still be bought, with prices. */
+export const getPromotionOptions = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (auction) res.json({ success: true, data: promotionOptions(auction) });
+  } catch (error) { promoFail(res, error); }
+};
+
+/** POST /api/v1/auctions/:id/promote { featured, metaBoostPackage }: starts the card payment. */
+export const startListingPromotion = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (!auction) return;
+    const seller = await User.findById(req.user._id);
+    const payment = await startPromotion(auction, seller, req.body || {});
+    res.json({ success: true, data: { payment } });
+  } catch (error) { promoFail(res, error); }
+};
+
+/** POST /api/v1/auctions/:id/promote/confirm { paymentIntentId } */
+export const confirmListingPromotion = async (req, res) => {
+  try {
+    const auction = await ownLot(req, res);
+    if (!auction) return;
+    await confirmPromotion(auction, req.body?.paymentIntentId);
+    res.json({ success: true, message: "Payment received. Your promotion is on." });
+  } catch (error) { promoFail(res, error); }
 };
