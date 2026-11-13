@@ -26,3 +26,11 @@ dist-ssr
 #env file
 .env
 .env.*
+# Mobile app: Firebase config and signing keys stay off GitHub (public repo)
+google-services.json
+GoogleService-Info.plist
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision

@@ -7,6 +7,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { PopUpContextProvider } from './contexts/PopUpContextProvider';
 import { Protected, LoadingSpinner, AdminRoute } from './components';
 import { AuthProvider } from './contexts/AuthContext.jsx';
+import { isNativeApp, IS_APP_BUILD } from './native/platform';
+import NativeBridge from './components/native/NativeBridge';
 
 const Home = lazy(() => import('./pages/Home'));
 const Contact = lazy(() => import('./pages/Contact'));
@@ -32,6 +34,9 @@ const Unsubscribe = lazy(() => import('./pages/Unsubscribe'));
 const SingleCatalogue = lazy(() => import('./pages/SingleCatalogue'));
 const Catalogues = lazy(() => import('./pages/Catalogues'));
 const BuyItNow = lazy(() => import('./pages/BuyItNow'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const AdminOnWebsite = lazy(() => import('./pages/AdminOnWebsite'));
+const DeleteAccount = lazy(() => import('./pages/DeleteAccount'));
 const RateUs = lazy(() => import('./pages/RateUs'));
 const Reviews = lazy(() => import('./pages/WhatOurClientsSay'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -124,6 +129,11 @@ const AdminEmailCampaigns = lazy(() => import('./pages/admin/EmailCampaigns'));
 const AdminAllCatalogues = lazy(() => import('./pages/admin/AllCatalogues'));
 const AdminWebsiteReviews = lazy(() => import('./pages/admin/WebsiteReviews'));
 
+// iPhone / Android app start-up (status bar, links, push notifications).
+if (isNativeApp) {
+    import('./native/init').then((m) => m.initNativeApp()).catch((err) => console.error('App start-up failed', err));
+}
+
 createRoot(document.getElementById('root')).render(
     //<StrictMode>
     <AuthProvider>
@@ -131,6 +141,7 @@ createRoot(document.getElementById('root')).render(
             <BrowserRouter>
                 {/* Sets the tab title and meta tags for every page, dashboards included. */}
                 <RouteSeo />
+                {isNativeApp && <NativeBridge />}
                 <Routes>
                     <Route path='/' element={<App />}>
                         <Route path='' index={true} element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Home /></Suspense>} />
@@ -184,6 +195,10 @@ createRoot(document.getElementById('root')).render(
                         <Route path='/catalogues' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Catalogues /></Suspense>} />
 
                         <Route path='/buy-it-now' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><BuyItNow /></Suspense>} />
+
+                        <Route path='/notifications' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Notifications /></Suspense>} />
+
+                        <Route path='/delete-account' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><DeleteAccount /></Suspense>} />
 
                         <Route path='/rate-us' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><RateUs /></Suspense>} />
 
@@ -641,6 +656,10 @@ createRoot(document.getElementById('root')).render(
                     </Route>
 
                     {/* Admin Layout */}
+                    {/* The admin dashboard is website-only: it is left out of the app build. */}
+                    {IS_APP_BUILD ? (
+                        <Route path='/admin/*' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><AdminOnWebsite /></Suspense>} />
+                    ) : (
                     <Route path='/admin' element={<Protected authetication={true} userType='admin'><AdminLayout /></Protected>} >
                         {/* Admin Dashboard */}
                         <Route
@@ -910,6 +929,7 @@ createRoot(document.getElementById('root')).render(
                                 }
                             /> */}
                     </Route>
+                    )}
                 </Routes>
             </BrowserRouter>
         </PopUpContextProvider>

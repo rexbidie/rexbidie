@@ -8,6 +8,7 @@ import {
     getSellerStats,
     getVerificationStatus,
     loginUser,
+    logoutUser,
     refreshAccessToken,
     registerUser,
     resetPassword,
@@ -26,6 +27,7 @@ import {
 } from "../controllers/profile.controller.js";
 
 import { auth, optionalAuth } from "../middlewares/auth.middleware.js";
+import { deleteMyAccount, deletionCheck } from "../controllers/accountDeletion.controller.js";
 
 const userRouter = Router();
 
@@ -33,6 +35,9 @@ const userRouter = Router();
 userRouter.post('/register', upload.single('identificationDocument'), registerUser);
 userRouter.post('/login', loginUser);
 userRouter.post('/refresh-token', refreshAccessToken);
+userRouter.post('/logout', auth, logoutUser);
+userRouter.get('/me/deletion-check', auth, deletionCheck);
+userRouter.post('/me/delete', auth, deleteMyAccount);
 userRouter.post('/forgot-password', forgotPassword);
 userRouter.post('/reset-password/:token', resetPassword);
 userRouter.get('/unsubscribe/:token', unsubscribeUser);

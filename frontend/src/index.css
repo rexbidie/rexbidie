@@ -75,3 +75,48 @@
         display: none !important;
     }
 }
+
+/* ------------------------------------------------------------------
+   iPhone / Android app only (html.is-app is set in src/native/init.js).
+   The app draws edge to edge, so keep content clear of the notch,
+   status bar and home bar. Nothing here affects the website.
+   ------------------------------------------------------------------ */
+html.is-app {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+html.is-app body {
+  padding-top: var(--sat);
+}
+/* Solid strip behind the status bar so scrolled content never shows under it. */
+html.is-app body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--sat);
+  background: #ffffff;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+html.is-app header.fixed,
+html.is-app .fixed.top-0,
+html.is-app .fixed.top-4,
+html.is-app .fixed.inset-0 {
+  top: var(--sat);
+}
+html.is-app .fixed.top-4 {
+  top: calc(1rem + var(--sat));
+}
+html.is-app .app-bottom-nav {
+  padding-bottom: calc(0.625rem + var(--sab));
+}
+html.is-app .fixed.bottom-0.mb-20 {
+  margin-bottom: calc(5rem + var(--sab));
+}
+html.is-app .fixed.bottom-20 {
+  bottom: calc(5rem + var(--sab));
+}

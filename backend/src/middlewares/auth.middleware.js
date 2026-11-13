@@ -18,9 +18,9 @@ export const auth = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
         // Find user by ID from token
-        const user = await User.findById(decoded.id).select('-password -refreshToken');
+        const user = await User.findById(decoded.id).select('-password -refreshToken -sessions');
 
-        if (!user) {
+        if (!user || user.deletedAt) {
             return res.status(401).json({
                 success: false,
                 message: 'Invalid access token - user not found'
@@ -109,7 +109,7 @@ export const optionalAuth = async (req, res, next) => {
 
         if (token) {
             const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-            const user = await User.findById(decoded.id).select('-password -refreshToken');
+            const user = await User.findById(decoded.id).select('-password -refreshToken -sessions');
 
             if (user && user.isActive) {
                 req.user = user;

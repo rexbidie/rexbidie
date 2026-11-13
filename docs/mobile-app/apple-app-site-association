@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.ie.rexbid.app"],
+        "components": [
+          { "/": "/auction/*" },
+          { "/": "/catalogue/*" },
+          { "/": "/buy-it-now*" },
+          { "/": "/bidder/*" },
+          { "/": "/seller/*" },
+          { "/": "/company/*" },
+          { "/": "/broker/*" }
+        ]
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ import {
 import axiosInstance from "../../utils/axiosInstance";
 import { useAuth } from "../../contexts/AuthContext";
 import PreferencesPanel from "../../components/PreferencesPanel";
+import DeleteAccountPanel from "../../components/DeleteAccountPanel";
 
 // Default preferences
 const defaultPreferences = {
@@ -358,7 +359,7 @@ function Profile() {
         { id: "personal", label: "Personal Info", icon: <User size={18} /> },
         { id: "address", label: "Address", icon: <MapPin size={18} /> },
         // { id: "verification", label: "ID Verification", icon: <FileText size={18} /> },
-        { id: "preferences", label: "Preferences", icon: <Bell size={18} /> },
+        { id: "preferences", label: "Notifications", icon: <Bell size={18} /> },
         { id: "security", label: "Security", icon: <Shield size={18} /> }
     ];
 
@@ -712,10 +713,13 @@ function Profile() {
 
                                 {/* Security Section */}
                                 {activeSection === "security" && (
-                                    <PasswordChangeForm
-                                        onChangePassword={handlePasswordChange}
-                                        saving={saving}
-                                    />
+                                    <>
+                                        <PasswordChangeForm
+                                            onChangePassword={handlePasswordChange}
+                                            saving={saving}
+                                        />
+                                        <DeleteAccountPanel />
+                                    </>
                                 )}
                                 {/* ID Verification Section */}
                                 {activeSection === "verification" && (

@@ -3,6 +3,8 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { getGaClientId } from '../utils/ga.js';
 import { syncMetaUser } from '../utils/metaPixel.js';
+import { unregisterPush } from '../native/push';
+import { isNativeApp } from '../native/platform';
 
 const AuthContext = createContext();
 
@@ -48,7 +50,9 @@ export const AuthProvider = ({ children }) => {
             {
                 email: loginData.email.toLowerCase(),
                 password: loginData.password,
-                gaClientId: getGaClientId()
+                gaClientId: getGaClientId(),
+                // "Keep me signed in": a choice on the website, always on in the app.
+                rememberMe: loginData.rememberMe ?? isNativeApp,
             }
         );
 
@@ -87,6 +91,18 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        // App: stop this phone getting the signed-out user's notifications.
+        const accessToken = localStorage.getItem('accessToken');
+        const refreshToken = localStorage.getItem('refreshToken');
+        unregisterPush(accessToken);
+        // End this device's session on the server (other devices stay signed in).
+        if (accessToken && refreshToken) {
+            axios.post(
+                `${import.meta.env.VITE_DOMAIN_URL}/api/v1/users/logout`,
+                { refreshToken },
+                { headers: { Authorization: `Bearer ${accessToken}` } },
+            ).catch(() => {});
+        }
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');

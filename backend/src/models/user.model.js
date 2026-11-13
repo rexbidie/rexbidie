@@ -96,7 +96,32 @@ const userSchema = new Schema(
       country: { type: String, trim: true },
     },
     preferences: {
+      // Old single switch: false turns off every optional email.
       emailUpdates: { type: Boolean, default: true },
+      // Per-category choices (see utils/emailPreferences.js). Payments, auction
+      // won, offer accepted, item sold and account emails can't be turned off.
+      email: {
+        bidding: { type: Boolean, default: true },
+        reminders: { type: Boolean, default: true },
+        watchlist: { type: Boolean, default: true },
+        offers: { type: Boolean, default: true },
+        buyItNow: { type: Boolean, default: true },
+        questions: { type: Boolean, default: true },
+        myListings: { type: Boolean, default: true },
+        newListings: { type: Boolean, default: true },
+        news: { type: Boolean, default: true },
+      },
+      push: {
+        bidding: { type: Boolean, default: true },
+        reminders: { type: Boolean, default: true },
+        watchlist: { type: Boolean, default: true },
+        offers: { type: Boolean, default: true },
+        buyItNow: { type: Boolean, default: true },
+        questions: { type: Boolean, default: true },
+        myListings: { type: Boolean, default: true },
+        newListings: { type: Boolean, default: true },
+        news: { type: Boolean, default: true },
+      },
     },
 
     createdBy: {
@@ -268,6 +293,9 @@ const userSchema = new Schema(
       type: Boolean,
       default: false, //changed
     },
+    // Set when the user deleted their account (it is anonymised, not removed).
+    deletedAt: { type: Date, default: null },
+    deletionReason: { type: String, trim: true },
     isActive: {
       type: Boolean,
       default: true,
@@ -307,8 +335,24 @@ const userSchema = new Schema(
     },
 
     // Tokens
+    // Legacy single refresh token (sign-ins from before per-device sessions).
     refreshToken: {
       type: String,
+    },
+    // One entry per signed-in device / browser (see utils/sessions.js).
+    sessions: {
+      type: [
+        {
+          _id: false,
+          hash: String,
+          rememberMe: Boolean,
+          createdAt: Date,
+          expiresAt: Date,
+          rotatedAt: Date,
+        },
+      ],
+      default: [],
+      select: false,
     },
     resetPasswordToken: {
       type: String,
@@ -411,6 +455,7 @@ userSchema.methods.toSafeObject = function () {
   const userObject = this.toObject();
   delete userObject.password;
   delete userObject.refreshToken;
+  delete userObject.sessions;
   delete userObject.resetPasswordToken;
   delete userObject.resetPasswordTokenExpiry;
   delete userObject.emailVerificationToken;

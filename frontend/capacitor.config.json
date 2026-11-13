@@ -1,0 +1,46 @@
+{
+  "appId": "ie.rexbid.app",
+  "appName": "RexBid",
+  "webDir": "dist",
+  "backgroundColor": "#ffffff",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never",
+    "scheme": "RexBid"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#072342",
+      "showSpinner": false
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    },
+    "FirebaseMessaging": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    },
+    "Keyboard": {
+      "resizeOnFullScreen": true
+    }
+  },
+  "experimental": {
+    "ios": {
+      "spm": {
+        "packageOptions": {
+          "@capacitor-firebase/messaging": {
+            "symlink": true
+          }
+        }
+      }
+    }
+  }
+}

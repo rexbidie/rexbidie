@@ -5,7 +5,7 @@ the site (owner, developer, or Claude in a new session) can pick up where things
 were left. **This repository is public: never put passwords, API keys, personal
 data or private business details in this file.**
 
-_Last updated: 11 November 2026_
+_Last updated: 13 November 2026_
 
 ---
 
@@ -72,6 +72,32 @@ Email (9 Nov, outside the code): sending moved from Register365 to Google; DKIM 
 Backend tests: `cd backend && npm test` (node:test).
 
 The backend needs **Node 20.9 or newer** (`engines` in `backend/package.json`; required by nodemailer 10). Security audit 11 Nov 2026: backend 0 known vulnerabilities; frontend 4 low/moderate left (build-time `@tailwindcss/typography`, and `quill` in the listing editor) where npm's only suggested fix is a downgrade.
+
+---
+
+## 3e. iPhone & Android app (Nov 2026)
+
+The app is the website's React code in a Capacitor shell (`frontend/ios`, `frontend/android`),
+talking to the same backend. Admin pages, the cookie banner, GA and Meta Pixel are left out of
+the app build (`npm run app:build`, Vite mode `app`). Full guide: **`docs/MOBILE-APP.md`**.
+
+- **Push notifications + inbox.** `backend/src/utils/push.js` (`notify` / `notifyLater`) saves an
+  in-app notification and pushes to the user's phones via Firebase Cloud Messaging. Hooked into the
+  emails in `nodemailer.js` (outbid, ending soon, won, payment request and reminders, Buy It Now,
+  questions, sold, buyer paid, paid out). Render: `FCM_SERVICE_ACCOUNT` (Firebase service-account
+  JSON), `PUSH_ENABLED=false` to pause. Models `Device`, `Notification` (90-day expiry);
+  API `/api/v1/notifications`.
+- **CORS** now also allows the app origins `capacitor://localhost`, `https://localhost`, `http://localhost`.
+- Firebase config files, signing keys and `.env.app.local` (Stripe key) are **never committed**.
+- **Sessions:** one refresh token per device (`user.sessions`, hashed, max 10; `utils/sessions.js`), so the
+  app and website no longer sign each other out. *Keep me signed in* = 90 days (`REMEMBER_ME_REFRESH_EXPIRY`),
+  otherwise 7 days; the app always remembers. Password reset signs out every device. New `POST /api/v1/users/logout`.
+- **Email / notification categories:** `utils/emailPreferences.js` (`user.preferences.email.*`, `.push.*`).
+  Always sent: payments, auction won, offer accepted, item sold, account/security. Offer counter/decline/withdraw
+  and listing approved/listed emails are now optional (category Offers / My listings). The old
+  `emailUpdates` switch still turns every optional email off. Marketing campaigns skip `email.news = false`.
+- **Account deletion:** `POST /api/v1/users/me/delete` (password + "DELETE"), `GET /api/v1/users/me/deletion-check`;
+  anonymises the user (`deletedAt`), keeps sale records. Page `/delete-account`.
 
 ---
 

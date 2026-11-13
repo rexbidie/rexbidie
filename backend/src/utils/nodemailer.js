@@ -6,6 +6,7 @@ import User from "../models/user.model.js";
 import Watchlist from "../models/watchlist.model.js";
 import { canEmailUser, canSendEmail } from "./emailPreferences.js";
 import { isManualPaymentRequired } from "../utils/manualPayment.js";
+import { notifyLater } from "./push.js";
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -735,6 +736,7 @@ const auctionSubmittedForApprovalEmail = async (adminEmail, auction, seller) => 
 
 // 7. Auction approved and live for seller
 const auctionApprovedEmail = async (seller, listing) => {
+    if (!(await canSendEmail(seller?.email, "auctionApproved"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Listing Approved and Live</h2>
@@ -790,6 +792,7 @@ const auctionApprovedEmail = async (seller, listing) => {
 
 // 8. Auction listed and live for seller (working one)
 const auctionListedEmail = async (listing, seller) => {
+    if (!(await canSendEmail(seller?.email, "auctionListed"))) return false;
     try {
         const content = `
             <h2>Your Listing is Now Live</h2>
@@ -1216,6 +1219,13 @@ const outbidNotificationEmail = async (
     listingUrl,
     outBidderCurrency
 ) => {
+    notifyLater({
+        email: userEmail,
+        type: "outbid",
+        title: "You've been outbid",
+        body: `${listing?.title || "A lot you bid on"}: new highest bid ${formatCurrency(newBid, outBidderCurrency)}. Tap to bid again.`,
+        url: `/auction/${listing?._id}`,
+    });
     if (!(await canSendEmail(userEmail, "outbid"))) return false;
 
     try {
@@ -1411,6 +1421,14 @@ const auctionEndingSoonEmail = async (
     userName,
     listing
 ) => {
+    notifyLater({
+        email: userEmail,
+        type: "endingSoon",
+        title: "Ending soon",
+        body: `${listing?.title || "A lot you're following"} is closing soon. Don't miss it.`,
+        url: `/auction/${listing?._id}`,
+        dedupeKey: `endingSoon:${listing?._id}`,
+    });
     if (!(await canSendEmail(userEmail, "endingSoon"))) return false;
 
     try {
@@ -1615,6 +1633,17 @@ const sendAuctionEndedSellerEmail = async (listing) => {
         }
 
         const isSold = listing?.status === "sold" || listing?.status === "sold_buy_now";
+        if (isSold) {
+            const area = listing.seller?.userType === "company" ? "company" : listing.seller?.userType === "broker" ? "broker" : "seller";
+            notifyLater({
+                user: listing.seller,
+                type: "sold",
+                title: "Your item sold",
+                body: `${listing?.title || "Your listing"} sold for ${formatCurrency(listing?.finalPrice || 0)}.`,
+                url: `/${area}/auctions/sold`,
+                dedupeKey: `sold:${listing?._id}`,
+            });
+        }
         const statusMessage = isSold
             ? `Sold for ${formatCurrency(listing?.finalPrice || 0)}`
             : "Listing ended without sale";
@@ -1905,6 +1934,15 @@ const sendAuctionWonEmail = async (listing) => {
             return false;
         }
 
+        notifyLater({
+            user: listing.winner,
+            type: "won",
+            title: "You won! 🎉",
+            body: `You won ${listing?.title || "your auction"}. Check your email and Documents for how to pay.`,
+            url: "/bidder/auctions/won",
+            dedupeKey: `won:${listing?._id}`,
+        });
+
         // Fail-safe: rate lookup failure → treat as high-value
         if (isManualPaymentRequired(listing)) {
             return sendAuctionWonHighValueEmail(listing);
@@ -2133,6 +2171,7 @@ const offerRejectedEmail = async (
     offerId,
     reason,
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerRejected"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Offer Declined</h2>
@@ -2196,6 +2235,7 @@ const offerCanceledEmail = async (
     offerAmount,
     offerId
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerCanceled"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Offer Canceled</h2>
@@ -2254,6 +2294,7 @@ const offerCounteredEmail = async (
     offerId,
     expiresAt
 ) => {
+    if (!(await canSendEmail(buyerEmail, "offerCountered"))) return false;
     try {
         const diff = Number(counterAmount) - Number(originalOfferAmount);
         const expiresStr = expiresAt
@@ -2335,6 +2376,7 @@ const buyerCounteredEmail = async (
     message,
     offerId
 ) => {
+    if (!(await canSendEmail(sellerEmail, "buyerCountered"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Buyer Countered Your Offer</h2>
@@ -2408,6 +2450,7 @@ const counterOfferRejectedEmail = async (
     counterAmount,  // seller's counter that was rejected, in seller currency
     offerId
 ) => {
+    if (!(await canSendEmail(sellerEmail, "counterOfferRejected"))) return false;
     try {
         const content = `
             <h2 style="text-align: center;">Counter Offer Declined</h2>
@@ -3832,6 +3875,15 @@ const paymentRequestBcc = () => {
 // Payment request for a sold lot, with the PDF attached.
 const paymentRequestEmail = async (sale, snapshot, pdfBuffer, filename) => {
     try {
+    notifyLater({
+        userId: sale?.buyer?.user,
+        email: sale?.buyer?.email,
+        type: "paymentRequest",
+        title: "Payment request",
+        body: `Your payment details for ${sale?.title || "your purchase"} are ready. Please pay within 48 hours.`,
+        url: "/bidder/documents",
+        dedupeKey: `paymentRequest:${sale?._id}:${filename || ""}`,
+    });
         const cur = snapshot.currency;
         const fmt = (n) => `${cur === 'GBP' ? '£' : '€'}${Number(n || 0).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const b = snapshot.bank || {};
@@ -3969,6 +4021,19 @@ const buyerReceiptEmail = async (sale, snapshot, pdfBuffer, filename) => {
 //   statement – sent by an admin
 const sellerStatementEmail = async (sale, snapshot, pdfBuffer, filename, dashboard = 'seller', context = 'statement') => {
     try {
+    if (context === 'paid' || context === 'paid_out') {
+        notifyLater({
+            userId: sale?.seller?.user,
+            email: sale?.seller?.email,
+            type: context === 'paid' ? "buyerPaid" : "paidOut",
+            title: context === 'paid' ? "The buyer has paid" : "You've been paid",
+            body: context === 'paid'
+                ? `Payment for ${sale?.title || "your item"} is in. Arrange collection with the buyer.`
+                : `Your payout for ${sale?.title || "your item"} has been sent.`,
+            url: `/${dashboard}/documents`,
+            dedupeKey: `${context}:${sale?._id}`,
+        });
+    }
         const cur = snapshot.currency;
         const name = snapshot.seller.name || snapshot.seller.companyName || 'there';
         const docsUrl = `${FRONTEND_URL}/${dashboard}/documents`;
@@ -4076,6 +4141,25 @@ const sellerPayoutSetupEmail = async (seller, { state, url, saleTitle }) => {
 // Automatic payment and collection reminders to the buyer.
 const saleReminderEmail = async (sale, kind) => {
     try {
+    {
+        const copy = {
+            payment_due_soon: ["Payment due soon", `Payment for ${sale?.title || "your purchase"} is due within 24 hours.`],
+            payment_overdue: ["Payment overdue", `Payment for ${sale?.title || "your purchase"} is overdue. Please pay now.`],
+            collection_due_soon: ["Collection due soon", `Please collect ${sale?.title || "your item"} within 24 hours.`],
+            collection_overdue: ["Collection overdue", `${sale?.title || "Your item"} is overdue for collection. Storage fines may apply.`],
+        }[kind];
+        if (copy) {
+            notifyLater({
+                userId: sale?.buyer?.user,
+                email: sale?.buyer?.email,
+                type: "saleReminder",
+                title: copy[0],
+                body: copy[1],
+                url: "/bidder/documents",
+                dedupeKey: `saleReminder:${sale?._id}:${kind}`,
+            });
+        }
+    }
         const cur = sale.currency;
         const b = sale.stripe?.bankTransfer || {};
         const sellerName = sale.seller?.companyName || sale.seller?.name || 'the seller';
@@ -4183,6 +4267,14 @@ const questionLink = (listing, questionId) =>
 
 // To the seller: a buyer has asked a question on their listing.
 const newQuestionSellerEmail = async (seller, listing, question, askerName) => {
+    notifyLater({
+        user: seller?._id,
+        email: seller?.email,
+        type: "newQuestion",
+        title: "New question on your listing",
+        body: `${listing?.title ? `${listing.title}: ` : ""}"${String(question?.content || question?.text || question || "").slice(0, 140)}"`,
+        url: `/auction/${listing?._id}?tab=questions`,
+    });
     if (!(await canSendEmail(seller?.email, "newQuestionSeller"))) return false;
     try {
         const content = `
@@ -4217,6 +4309,16 @@ const newQuestionSellerEmail = async (seller, listing, question, askerName) => {
 // To a buyer: the seller (or RexBid) has answered a question on a lot.
 // `isAsker` is true for the person who asked, false for others following the lot.
 const questionAnsweredEmail = async (recipient, listing, question, answer, answererName, isAsker = true) => {
+    if (isAsker) {
+        notifyLater({
+            user: recipient?._id,
+            email: recipient?.email,
+            type: "questionAnswered",
+            title: "Your question was answered",
+            body: `${listing?.title ? `${listing.title}: ` : ""}"${String(answer?.content || answer?.text || answer || "").slice(0, 140)}"`,
+            url: `/auction/${listing?._id}?tab=questions`,
+        });
+    }
     const type = isAsker ? "questionAnswered" : "newComment";
     if (!(await canSendEmail(recipient?.email, type))) return false;
     try {
@@ -4256,6 +4358,15 @@ const binHoursLeft = (endsAt) => Math.max(1, Math.round((new Date(endsAt) - Date
 
 // To buyers: a lot they bid on, watched or asked about is on Buy It Now.
 const postAuctionBinBuyerEmail = async (recipient, listing, { price, currency, endsAt, isTopBidder }) => {
+    notifyLater({
+        user: recipient?._id,
+        email: recipient?.email,
+        type: "buyItNow",
+        title: isTopBidder ? "You can now buy the lot you bid on" : "Now on Buy It Now",
+        body: `${listing?.title || "A lot you followed"} is available for ${formatCurrency(price, currency)} for 48 hours. First to confirm wins.`,
+        url: "/buy-it-now",
+        dedupeKey: `buyItNow:${listing?._id}`,
+    });
     const type = isTopBidder ? "postAuctionBinTopBidder" : "postAuctionBin";
     if (!(await canSendEmail(recipient?.email, type))) return false;
     try {
@@ -4426,6 +4537,7 @@ const renderBinInviteEmail = (seller, lots, { deadline } = {}) => {
 
 const sendBinInviteEmail = async (to, rendered) => {
     if (!to) return false;
+    if (!(await canSendEmail(to, "binInvite"))) return false;
     const info = await transporter.sendMail({
         from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
         to,
@@ -4436,7 +4548,41 @@ const sendBinInviteEmail = async (to, rendered) => {
     return !!info;
 };
 
+// Account deleted by the user: confirmation to their (old) address, and a note to the office.
+const accountDeletedEmail = async ({ email, name, userType }, { reason } = {}) => {
+    const content = `
+            <h2 style="text-align: center;">Your account has been deleted</h2>
+            <p>Hi ${escapeHtml(name || 'there')},</p>
+            <p>As you asked, your ${BRAND_NAME} account has been deleted. You've been signed out on every device and won't get any more emails from us.</p>
+            <p>We've removed your personal details, saved cards and ID documents. Records of completed sales, receipts and payouts are kept for as long as the law requires for accounting and tax, as explained in our privacy policy.</p>
+            <p>If you didn't ask for this, please reply to this email straight away.</p>
+            <p>You're welcome back any time: just register again.</p>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: `Your ${BRAND_NAME} account has been deleted`,
+        html: baseTemplate(content, 'Account deleted'),
+    });
+    if (process.env.EMAIL_USER) {
+        await transporter.sendMail({
+            from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+            to: process.env.EMAIL_USER,
+            subject: `Account deleted by user (${userType || 'user'})`,
+            html: baseTemplate(`
+                <h2>Account deleted</h2>
+                <p>A ${escapeHtml(userType || 'user')} deleted their own account.</p>
+                <p><strong>Email was:</strong> ${escapeHtml(email)}</p>
+                ${reason ? `<p><strong>Reason given:</strong> ${escapeHtml(reason)}</p>` : ''}
+                <p>Personal details have been removed. Sale records and payouts are unchanged.</p>
+            `, 'Account deleted'),
+        }).catch((err) => console.error('Account deleted admin note failed:', err.message));
+    }
+    return !!info;
+};
+
 export {
+    accountDeletedEmail,
     liveBuyNowBidderEmail,
     renderBinInviteEmail,
     sendBinInviteEmail,

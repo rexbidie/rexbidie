@@ -41,6 +41,7 @@ import shareRouter from './routes/share.route.js';
 import { jpegHandler } from './utils/jpegMedia.js';
 import { adminSaleRouter, saleRouter } from "./routes/sale.route.js";
 import connectRouter from "./routes/connect.route.js";
+import notificationRouter from "./routes/notification.route.js";
 import { handleStripeWebhook } from "./controllers/payment.controller.js";
 import sharp from "sharp";
 
@@ -85,13 +86,16 @@ app.use(express.urlencoded({ limit: '16kb' }));
 // }));
 
 // 1. Define allowed origins
+const APP_ORIGINS = ['capacitor://localhost', 'https://localhost', 'http://localhost'];
 const allowedOrigins = [
     'https://www.rexbid.ie',
     'https://rexbid.ie',
     'https://rexbid-frontend.onrender.com',
     'https://rexbid-backend.onrender.com',
     'http://localhost:5173',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    // The iPhone and Android apps (Capacitor) load the site from these.
+    ...APP_ORIGINS,
 ];
 
 // 2. Custom middleware to handle CORS for ALL requests (including OPTIONS)
@@ -155,6 +159,7 @@ app.use('/api/v1/buy-now', buyNowRouter);
 app.use('/api/v1/buy-it-now', postAuctionBinRouter);
 // app.use('/api/v1/admin/categories', categoryRouter);
 app.use('/api/v1/categories', categoryRouter);
+app.use('/api/v1/notifications', notificationRouter);
 app.use("/api/v1/checkout", checkoutRouter);
 app.use('/api/v1/payments', paymentRouter);
 app.use("/api/v1/payouts", payoutRouter);
@@ -203,6 +208,7 @@ const io = new Server(server, {
             'https://rexbid-backend.onrender.com',
             'http://localhost:5173',
             'http://localhost:3000',
+            ...APP_ORIGINS,
         ],
         credentials: true,
     },

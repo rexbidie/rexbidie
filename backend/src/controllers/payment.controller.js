@@ -122,9 +122,8 @@ export const createWonAuctionPayment = async (req, res) => {
                 await auction.save();
             }
 
-            if (user.preferences?.emailUpdates) {
-                paymentCompletedEmail(user, auction).catch(console.error);
-            }
+            // Payment emails are always sent (they can't be switched off).
+            paymentCompletedEmail(user, auction).catch(console.error);
 
             return res.status(200).json({
                 success: true,
@@ -642,10 +641,8 @@ export const createCheckoutPayment = async (req, res) => {
             displayCurrency: userCurrency,
         });
 
-        // 7. Send email to buyer (optional)
-        if (user.preferences?.emailUpdates) {
-            paymentCompletedEmail(user, auction).catch(console.error);
-        }
+        // 7. Send email to buyer (payment emails are always sent)
+        paymentCompletedEmail(user, auction).catch(console.error);
 
         return res.status(200).json({
             success: true,

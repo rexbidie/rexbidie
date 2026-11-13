@@ -30,7 +30,8 @@ import {
     AlertCircle,
     Banknote,
     Zap,
-    Info
+    Info,
+    Camera
 } from "lucide-react";
 import RTE from '../RTE';
 import toast from 'react-hot-toast';
@@ -45,6 +46,9 @@ import { FEATURED_FEE_EUR, SELLER_FEES_FREE_UNTIL, META_BOOST_PACKAGES, META_BOO
 import { HowSellingWorks, Hint, Note } from './ListingGuidance';
 import ListingExtrasPaymentModal from "./ListingExtrasPaymentModal";
 import { minLivePrice, CLOSE_CUTOFF_HOURS } from '../../utils/liveBuyNow';
+import { isNativeApp } from '../../native/platform';
+import { pickPhotos, takePhoto } from '../../native/camera';
+import * as haptics from '../../native/haptics';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -769,9 +773,8 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
         setStep(step - 1);
     };
 
-    const handlePhotoUpload = async (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
+    const addPhotos = async (files) => {
+        if (!files || files.length === 0) return;
 
         setIsCompressing(true);
         try {
@@ -783,7 +786,34 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             toast.error('Could not process one or more images');
         } finally {
             setIsCompressing(false);
-            e.target.value = ''; // allow re-selecting the same file
+        }
+    };
+
+    const handlePhotoUpload = async (e) => {
+        const files = Array.from(e.target.files);
+        await addPhotos(files);
+        e.target.value = ''; // allow re-selecting the same file
+    };
+
+    // App only: take photos with the camera, or pick several from the library.
+    const handleTakePhoto = async () => {
+        try {
+            const file = await takePhoto();
+            if (file) {
+                haptics.tap();
+                await addPhotos([file]);
+            }
+        } catch (err) {
+            console.error('Camera failed:', err);
+            toast.error('Could not open the camera. Check RexBid is allowed to use it in Settings.');
+        }
+    };
+    const handlePickPhotos = async () => {
+        try {
+            await addPhotos(await pickPhotos(30));
+        } catch (err) {
+            console.error('Photo library failed:', err);
+            toast.error('Could not open your photos. Check RexBid is allowed to use them in Settings.');
         }
     };
 
@@ -1260,7 +1290,32 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                             <label htmlFor="photo-upload" className="block text-sm font-medium text-secondary mb-1">
                                                 Attach Photos *
                                             </label>
-                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                            {isNativeApp && (
+                                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleTakePhoto}
+                                                        disabled={isCompressing}
+                                                        className="flex flex-col items-center justify-center gap-1 py-4 rounded-lg bg-secondary text-white font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Camera size={26} />
+                                                        Take photo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handlePickPhotos}
+                                                        disabled={isCompressing}
+                                                        className="flex flex-col items-center justify-center gap-1 py-4 rounded-lg border-2 border-secondary text-secondary font-semibold disabled:opacity-50"
+                                                    >
+                                                        <Image size={26} />
+                                                        From library
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {isNativeApp && isCompressing && (
+                                                <p className="text-sm text-gray-600 mb-2">Optimising images…</p>
+                                            )}
+                                            <div className={`border-2 border-dashed border-gray-300 rounded-lg p-6 text-center ${isNativeApp ? 'hidden' : ''}`}>
                                                 <input
                                                     type="file"
                                                     multiple

@@ -8,6 +8,8 @@ import {
     BarChart3
 } from "lucide-react";
 import axiosInstance from "../../utils/axiosInstance";
+import PreferencesPanel from "../../components/PreferencesPanel";
+import DeleteAccountPanel from "../../components/DeleteAccountPanel";
 
 // Default preferences
 const defaultPreferences = {
@@ -205,7 +207,7 @@ function Profile() {
     const sections = [
         { id: "personal", label: "Personal Info", icon: <User size={18} /> },
         { id: "address", label: "Address", icon: <MapPin size={18} /> },
-        // { id: "preferences", label: "Preferences", icon: <Bell size={18} /> },
+        { id: "preferences", label: "Notifications", icon: <Bell size={18} /> },
         { id: "security", label: "Security", icon: <Shield size={18} /> }
     ];
 
@@ -494,12 +496,23 @@ function Profile() {
                                     </div>
                                 )}
 
-                                {/* Security Section */}
-                                {activeSection === "security" && (
-                                    <PasswordChangeForm
-                                        onChangePassword={handlePasswordChange}
+                                {activeSection === "preferences" && (
+                                    <PreferencesPanel
+                                        initialPreferences={userData.preferences}
+                                        onSave={handlePreferencesChange}
                                         saving={saving}
                                     />
+                                )}
+
+                                {/* Security Section */}
+                                {activeSection === "security" && (
+                                    <>
+                                        <PasswordChangeForm
+                                            onChangePassword={handlePasswordChange}
+                                            saving={saving}
+                                        />
+                                        <DeleteAccountPanel />
+                                    </>
                                 )}
                             </div>
 

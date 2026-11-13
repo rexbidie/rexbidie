@@ -8,6 +8,7 @@ import {
   welcomeEmail,
 } from "../utils/nodemailer.js";
 import crypto from "crypto";
+import { endAllSessions, endSession, rotateSession, startSession } from "../utils/sessions.js";
 import BidPayment from "../models/bidPayment.model.js";
 import Review from "../models/review.model.js";
 import Auction from "../models/auction.model.js";
@@ -39,12 +40,10 @@ const convertPrice = (auction, targetCurrency, priceField) => {
 // Helper function to generate tokens and set cookies
 const generateTokensAndRespond = async (user, req, res, message) => {
   try {
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
+    // One session per device; "Keep me signed in" (always on in the app) lasts longer.
+    const rememberMe = req.body?.rememberMe === true || req.body?.rememberMe === "true";
+    const { accessToken, refreshToken } = startSession(user, { rememberMe });
     const resetToken = user.generateResetPasswordToken();
-
-    // Save refresh token to user document
-    user.refreshToken = refreshToken;
 
     // after successful authentication
     if (req.body.gaClientId) {
@@ -238,9 +237,9 @@ export const loginUser = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email: normalizedEmail }).select("+sessions");
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       return res.status(401).json({
         success: false,
         message: "No user found",
@@ -278,10 +277,10 @@ export const loginUser = async (req, res) => {
 // Logout Controller
 export const logoutUser = async (req, res) => {
   try {
-    const user = req.user;
-
-    // Clear refresh token from database
-    user.refreshToken = undefined;
+    // Sign out this device (refresh token in the body), or everywhere if none is given.
+    const user = await User.findById(req.user._id).select("+sessions");
+    if (req.body?.refreshToken) endSession(user, req.body.refreshToken);
+    else endAllSessions(user);
     await user.save({ validateBeforeSave: false });
 
     // Clear cookies
@@ -311,22 +310,18 @@ export const refreshAccessToken = async (req, res) => {
     }
 
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("+sessions");
 
-    if (!user || user.refreshToken !== refreshToken) {
+    const tokens = user && !user.deletedAt ? rotateSession(user, refreshToken, decoded) : null;
+    if (!tokens) {
+      if (user) await user.save({ validateBeforeSave: false }).catch(() => {});
       return res.status(401).json({
         success: false,
         message: "Invalid refresh token",
       });
     }
-
-    // Generate new tokens
-    const newAccessToken = user.generateAccessToken();
-    const newRefreshToken = user.generateRefreshToken();
-
-    // Update refresh token in database
-    user.refreshToken = newRefreshToken;
     await user.save({ validateBeforeSave: false });
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = tokens;
 
     res.status(200).json({
       success: true,
@@ -432,6 +427,10 @@ export const resetPassword = async (req, res) => {
     }
 
     user.password = newPassword;
+    // The link works once, and every device is signed out (someone else may have had access).
+    user.resetPasswordToken = undefined;
+    user.resetPasswordTokenExpiry = undefined;
+    endAllSessions(user);
     await user.save({ validateBeforeSave: false });
 
     return res.status(200).json({ success: true, message: "Password updated" });
