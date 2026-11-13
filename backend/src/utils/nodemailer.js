@@ -1279,6 +1279,56 @@ const outbidNotificationEmail = async (
     }
 };
 
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/** Admin: a seller edited a listing that needs (re-)approval. */
+const listingEditedAdminEmail = async (adminEmail, auction, seller, changedLabels = [], { live = true } = {}) => {
+    const sellerName = seller ? (seller.companyName || [seller.firstName, seller.lastName].filter(Boolean).join(" ") || seller.username) : "A seller";
+    const content = `
+            <h2 style="text-align: center;">Listing Edited: Needs Approval</h2>
+            <p style="text-align: center;">${escHtml(sellerName)} edited <strong>${escHtml(auction.title)}</strong>.</p>
+            ${createInfoCard(`
+                ${createSummaryRow('Listing:', escHtml(auction.title))}
+                ${createSummaryRow('Status:', live ? 'Live. It stays up with the current details until you approve the changes.' : 'Back in Pending for approval.')}
+                ${createSummaryRow('Changed:', escHtml(changedLabels.join(', ') || 'Details'))}
+            `)}
+            <div style="text-align: center; margin: 25px 0;">
+                ${createButton(live ? 'Review the changes' : 'Review the listing', `${FRONTEND_URL}/admin/auctions/${live ? 'edits' : 'all'}`, 'primary')}
+            </div>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: adminEmail,
+        subject: `Listing edited, needs approval - ${auction.title}`,
+        html: baseTemplate(content, 'Listing Edited'),
+    });
+    return !!info;
+};
+
+/** Seller: their edit was approved, or sent back with a note. */
+const listingEditDecisionEmail = async (sellerEmail, sellerName, auction, { approved, note } = {}) => {
+    const content = approved ? `
+            <h2 style="text-align: center;">Your Changes Are Live</h2>
+            <p>Dear ${escHtml(sellerName || 'there')},</p>
+            <p>We've approved your changes to <strong>${escHtml(auction.title)}</strong> and they're now live on the listing.</p>
+            <div style="text-align: center; margin: 25px 0;">${createButton('View your listing', `${FRONTEND_URL}/auction/${auction._id}`, 'primary')}</div>
+        ` : `
+            <h2 style="text-align: center;">Your Changes Need a Look</h2>
+            <p>Dear ${escHtml(sellerName || 'there')},</p>
+            <p>We couldn't approve your changes to <strong>${escHtml(auction.title)}</strong> yet. Your listing is still live with its previous details.</p>
+            ${createInfoCard(`<p style="margin: 0;"><strong>Note from RexBid:</strong><br>${escHtml(note).replace(/\n/g, '<br>')}</p>`)}
+            <p>You can edit the listing again from your dashboard and re-submit.</p>
+            <div style="text-align: center; margin: 25px 0;">${createButton('Go to My Listings', `${FRONTEND_URL}/seller/dashboard`, 'primary')}</div>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: sellerEmail,
+        subject: approved ? `Your changes are live - ${auction.title}` : `Your changes need a look - ${auction.title}`,
+        html: baseTemplate(content, approved ? 'Changes Approved' : 'Changes Not Approved'),
+    });
+    return !!info;
+};
+
 /** Tells a bidder that a lot they bid on was bought outright on Buy It Now during the auction. */
 const liveBuyNowBidderEmail = async (userEmail, userName, listing) => {
     if (!(await canSendEmail(userEmail, "outbid"))) return false;
@@ -4583,6 +4633,8 @@ const accountDeletedEmail = async ({ email, name, userType }, { reason } = {}) =
 
 export {
     accountDeletedEmail,
+    listingEditedAdminEmail,
+    listingEditDecisionEmail,
     liveBuyNowBidderEmail,
     renderBinInviteEmail,
     sendBinInviteEmail,

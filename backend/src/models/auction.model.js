@@ -1,4 +1,5 @@
 import { model, Schema } from "mongoose";
+import { minIncrementFor } from "../utils/listingRules.js";
 import mongoose from "mongoose";
 import agendaService from "../services/agendaService.js";
 import { calculateCommission } from "../utils/commissionCalculator.js";
@@ -185,6 +186,13 @@ const auctionSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // An edit to a live (or approved) listing waiting for admin approval
+    // (services/listingEditService.js). The listing keeps its current details
+    // until it's approved. status: pending, or rejected (with a note for the seller).
+    pendingEdit: { type: Schema.Types.Mixed, default: null },
+    lastEditApprovedAt: Date,
+    lastEditApprovedBy: { type: Schema.Types.ObjectId, ref: "User" },
+
     // Buy It Now while a reserve auction is live (utils/liveBuyNow.js).
     // Price is in the lot's own currency. processing: a purchase is going through.
     liveBuyNow: {
@@ -678,6 +686,11 @@ auctionSchema.methods.placeBid = async function (
   this.currentBidder = bidderId;
   this.bidCount += 1;
   this.lastBidTime = now;
+
+  // The increment never drops below the minimum for the current bid.
+  if (this.auctionType === "standard" || this.auctionType === "reserve") {
+    this.bidIncrement = Math.max(Number(this.bidIncrement) || 0, minIncrementFor(amount));
+  }
 
   // Auto-extend if bidding near end time (last 1 minute)
   if (this.autoExtend) {

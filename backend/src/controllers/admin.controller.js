@@ -139,6 +139,8 @@ export const getAdminStats = async (req, res) => {
     });
 
     const pendingModeration = pendingAuctions;
+    // Edits to live listings waiting for approval (services/listingEditService.js)
+    const pendingListingEdits = await Auction.countDocuments({ "pendingEdit.status": "pending" });
 
     // Get recent user registrations (last 7 days)
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -367,6 +369,7 @@ export const getAdminStats = async (req, res) => {
 
       successRate,
       pendingModeration,
+      pendingListingEdits,
       recentUsers,
 
       totalComments,

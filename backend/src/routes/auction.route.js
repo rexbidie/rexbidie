@@ -8,6 +8,8 @@ import {
     placeBid,
     buyLiveBuyNow,
     submitListingWithoutExtras,
+    changeBidIncrement,
+    discardPendingEdit,
     liveBuyNowStatus,
     getUserAuctions,
     getBiddingStats,
@@ -58,6 +60,8 @@ auctionRouter.get('/top', getTopLiveAuctions);
 auctionRouter.get('/extras/pricing', getListingExtrasPricing);
 auctionRouter.post("/:id/retry-extras-payment", authSeller, retryExtrasPayment);
 auctionRouter.post("/:id/submit-without-extras", authSeller, submitListingWithoutExtras);
+auctionRouter.patch("/:id/increment", authSeller, changeBidIncrement);
+auctionRouter.delete("/:id/pending-edit", authSeller, discardPendingEdit);
 auctionRouter.post("/:id/proxy-bid", authBidder, placeProxyBid);
 auctionRouter.put("/:id/proxy-bid", authBidder, updateProxyBid);
 auctionRouter.delete("/:id/proxy-bid", authBidder, cancelProxyBid);
