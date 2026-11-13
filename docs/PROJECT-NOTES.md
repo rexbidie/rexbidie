@@ -214,6 +214,8 @@ After deploying, in Events Manager create Custom Conversions for `PlaceBid` and 
 
 **JPEG photos for social posts.** `GET https://rexbid-backend.onrender.com/media/jpeg/<folder>/<file>` returns a stored photo as a JPEG (max 1440px wide); add `?fit=instagram` to crop into Instagram's 4:5–1.91:1 range (`backend/src/utils/jpegMedia.js`). Only `auction-photos`, `catalogue-images` and `category-images` are allowed, never ID documents. Listing link previews (`og:image`) now use the JPEG copy. Optional Render setting `PUBLIC_BACKEND_URL` if the backend address changes.
 
+**Collage images for social posts.** `GET https://rexbid-backend.onrender.com/media/collage.jpg?kind=sold&lots=<id>,<id>,…` (or `kind=closing` for catalogue / full-list posts) returns a 1080×1350 branded image: cream background, RexBid logo, gold header ("SOLD" / "BID NOW"), up to 9 lots with photo, name, county and (sold) price, navy footer with the next auction dates. Optional `names=A|B|…` and `places=X|Y|…` override the listing titles and counties. Prices, photos and dates always come from the database; sold collages only accept sold lots. Code: `backend/src/utils/collage.js`; fonts (Inter, SIL OFL) and logo in `backend/assets/`. Closing-time wording comes from `SOCIAL_CLOSING_TIME_TEXT` (default "from 7.30PM").
+
 **Seller-paid Meta ads** (`metaBoostPackage`): the seller's €10 / €20 / €40 includes Meta's 23% Irish VAT, so the ad's lifetime budget is the price ÷ 1.23 (€8.13 / €16.26 / €32.52), running until the lot closes.
 
 ---
