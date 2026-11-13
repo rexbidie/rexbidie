@@ -75,6 +75,29 @@ const convertAmountToBase = (amount, buyerCurrency, auction) => {
   return parseFloat((amount * rate).toFixed(2));
 };
 
+/**
+ * Stripe customer for a seller paying for listing extras. A saved customer
+ * ID that no longer exists in this Stripe account (deleted, or made with
+ * test keys) is replaced instead of failing the payment.
+ */
+const ensureExtrasCustomer = async (seller) => {
+  if (seller.stripeCustomerId) {
+    try {
+      const existing = await stripe.customers.retrieve(seller.stripeCustomerId);
+      if (existing && !existing.deleted) return existing.id;
+    } catch (err) {
+      if (err?.code !== "resource_missing") throw err;
+    }
+  }
+  const customer = await stripe.customers.create({
+    email: seller.email,
+    name: `${seller.firstName || ""} ${seller.lastName || ""}`.trim() || seller.username,
+    metadata: { userId: seller._id.toString() },
+  });
+  await User.findByIdAndUpdate(seller._id, { stripeCustomerId: customer.id });
+  return customer.id;
+};
+
 // Create New Auction
 export const createAuction = async (req, res) => {
   try {
@@ -499,55 +522,59 @@ export const createAuction = async (req, res) => {
 
     // ── Extras payment flow ──
     if (extras.total > 0) {
-      // Ensure seller has a Stripe customer (create one if missing)
-      let customerId = seller.stripeCustomerId;
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: seller.email,
-          name: `${seller.firstName || ''} ${seller.lastName || ''}`.trim() || seller.username,
-          metadata: { userId: seller._id.toString() },
-        });
-        customerId = customer.id;
-        await User.findByIdAndUpdate(seller._id, { stripeCustomerId: customerId });
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create(
-        {
-          amount: Math.round(extras.total * 100),
-          currency: extras.currency.toLowerCase(),
-          customer: customerId,
-          description: `Listing extras for "${auction.title}"`,
-          payment_method_types: ['card'],
-          metadata: {
-            type: 'listing_extras',
-            auctionId: auction._id.toString(),
-            sellerId: seller._id.toString(),
-          },
-        },
-        { idempotencyKey: `listing_extras_${auction._id}` }
-      );
-
+      // Record what is owed first, so the listing always shows a "Pay" button
+      // in the seller's dashboard even if Stripe can't be reached right now.
       auction.extrasPayment = {
         amount: extras.total,
         currency: extras.currency,
         status: 'pending',
-        paymentIntentId: paymentIntent.id,
         lineItems: extras.lineItems,
       };
       await auction.save();
 
+      let paymentIntent = null;
+      try {
+        const customerId = await ensureExtrasCustomer(seller);
+        paymentIntent = await stripe.paymentIntents.create(
+          {
+            amount: Math.round(extras.total * 100),
+            currency: extras.currency.toLowerCase(),
+            customer: customerId,
+            description: `Listing extras for "${auction.title}"`,
+            payment_method_types: ['card'],
+            metadata: {
+              type: 'listing_extras',
+              auctionId: auction._id.toString(),
+              sellerId: seller._id.toString(),
+            },
+          },
+          { idempotencyKey: `listing_extras_${auction._id}` }
+        );
+        auction.extrasPayment.paymentIntentId = paymentIntent.id;
+        await auction.save();
+      } catch (err) {
+        // The listing is saved. Don't report "create failed" (the seller would
+        // submit it again and make a duplicate); they can pay from All Auctions.
+        console.error("Listing extras payment setup failed:", err?.message);
+      }
+
       return res.status(201).json({
         success: true,
-        message: 'Auction created — please complete payment for paid extras',
+        message: paymentIntent
+          ? 'Auction created — please complete payment for paid extras'
+          : 'Auction saved. Payment for the paid extras could not be started, please pay from All Auctions in your dashboard.',
         data: {
           auction,
-          payment: {
-            clientSecret: paymentIntent.client_secret,
-            paymentIntentId: paymentIntent.id,
-            amount: extras.total,
-            currency: extras.currency,
-            lineItems: extras.lineItems,
-          },
+          payment: paymentIntent
+            ? {
+                clientSecret: paymentIntent.client_secret,
+                paymentIntentId: paymentIntent.id,
+                amount: extras.total,
+                currency: extras.currency,
+                lineItems: extras.lineItems,
+              }
+            : null,
+          paymentSetupFailed: !paymentIntent,
         },
       });
     }
@@ -4369,16 +4396,7 @@ export const retryExtrasPayment = async (req, res) => {
         return res.status(404).json({ success: false, message: "Seller not found" });
       }
 
-      let customerId = seller.stripeCustomerId;
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: seller.email,
-          name: `${seller.firstName || ""} ${seller.lastName || ""}`.trim() || seller.username,
-          metadata: { userId: seller._id.toString() },
-        });
-        customerId = customer.id;
-        await User.findByIdAndUpdate(seller._id, { stripeCustomerId: customerId });
-      }
+      const customerId = await ensureExtrasCustomer(seller);
 
       const pi = await stripe.paymentIntents.create(
         {

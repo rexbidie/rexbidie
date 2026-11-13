@@ -941,12 +941,19 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             );
 
             if (data && data.success) {
-                toast.success(
-                    data.data?.payment
-                        ? "Auction created — complete payment below to submit for review."
-                        : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
-                    { duration: 8000 }
-                );
+                if (data.data?.paymentSetupFailed) {
+                    toast(
+                        "Your listing is saved, but payment for the extras couldn't be started. Please pay from All Auctions in your dashboard.",
+                        { duration: 10000 }
+                    );
+                } else {
+                    toast.success(
+                        data.data?.payment
+                            ? "Auction created — complete payment below to submit for review."
+                            : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
+                        { duration: 8000 }
+                    );
+                }
 
                 trackMeta("Lead", {
                     content_ids: data.data?.auction?._id ? [String(data.data.auction._id)] : undefined,
