@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
     confirmCheckoutPayment,
+    confirmListingExtrasPayment,
     createBankTransferPayment,
     createCheckoutPayment,
     createWonAuctionPayment,
@@ -21,6 +22,7 @@ paymentRouter.post("/create-checkout-payment", createCheckoutPayment);
 paymentRouter.post("/confirm-checkout-payment", confirmCheckoutPayment);
 paymentRouter.post("/create-bank-transfer-payment", createBankTransferPayment);
 paymentRouter.post("/pay-commission", paySellerCommission);
+paymentRouter.post("/confirm-listing-extras", confirmListingExtrasPayment);
 
 // The Stripe webhook is registered in server.js, ahead of the JSON body
 // parser and without login, so Stripe's signature check can work.

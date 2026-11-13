@@ -1324,6 +1324,18 @@ export const approveAuction = async (req, res) => {
       });
     }
 
+    // Block approval until paid extras are settled
+    const needsExtrasPayment =
+      (auction.featuredRequested || auction.metaBoostPackage) &&
+      auction.extrasPayment?.amount > 0;
+
+    if (needsExtrasPayment && auction.extrasPayment?.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: `Seller has not completed payment for listing extras (status: ${auction.extrasPayment?.status || 'unknown'}). Cannot approve until paid.`,
+      });
+    }
+
     // Optional: closing time picked from the slot menu.
     const { closingTime } = req.body || {};
     let closingChanged = false;
