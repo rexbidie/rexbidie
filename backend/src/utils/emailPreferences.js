@@ -53,9 +53,9 @@ export const NOTIFICATION_CATEGORIES = [
     { key: "reminders", label: "Ending soon", description: "Reminders before lots you bid on or follow close" },
     { key: "watchlist", label: "Watchlist", description: "New bids on lots in your watchlist" },
     { key: "offers", label: "Offers", description: "Offers made, countered, declined or withdrawn" },
-    { key: "buyItNow", label: "Buy It Now", description: "Lots you bid on or follow going on Buy It Now" },
+    { key: "buyItNow", label: "Last Chance", description: "Lots you bid on or follow going on Last Chance (fixed price for 48 hours after the auction)" },
     { key: "questions", label: "Questions", description: "Questions and answers on listings" },
-    { key: "myListings", label: "My listings (sellers)", description: "New bids, approvals, reserve tips and Buy It Now for your own listings" },
+    { key: "myListings", label: "My listings (sellers)", description: "New bids, approvals, reserve tips and Last Chance for your own listings" },
     { key: "newListings", label: "New listings", description: "Alerts about newly listed machinery" },
     { key: "news", label: "News and offers from RexBid", description: "Occasional updates, sale dates and promotions" },
 ];

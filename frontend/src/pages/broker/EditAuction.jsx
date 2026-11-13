@@ -1857,7 +1857,7 @@ const EditAuction = () => {
                                                         </div>
                                                         {errors.liveBuyNowPrice && <p className="text-red-500 text-sm mt-1">{errors.liveBuyNowPrice.message}</p>}
                                                         <p className="text-sm text-secondary mt-1">
-                                                            Lets a buyer buy outright while the auction is live. At least 15% above the reserve. Closes once bidding reaches 90% of the reserve or {CLOSE_CUTOFF_HOURS} hours before the end. Can't be added or raised once bidding starts.
+                                                            Lets a buyer buy outright while the auction is live. At least 15% above the reserve. Closes once bidding reaches 90% of the reserve or {CLOSE_CUTOFF_HOURS} hours before the end. Once bidding starts it can only be lowered or removed (or added from My Listings).
                                                         </p>
                                                     </div>
                                                 )}

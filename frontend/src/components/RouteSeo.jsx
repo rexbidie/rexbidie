@@ -44,8 +44,8 @@ const STATIC_PAGES = {
         title: "Sell Your Machinery Online in Ireland | RexBid",
         description: "Sell your tractor, digger, trailer or farm machinery at online auction. List it yourself or WhatsApp us the photos and we'll list it for you.",
     },
-    "/buy-it-now": {
-        title: "Buy It Now – Machinery at a Fixed Price for 48 Hours | RexBid",
+    "/last-chance": {
+        title: "Last Chance – Machinery at a Fixed Price for 48 Hours | RexBid",
         description: "Tractors, trailers and plant that just missed their reserve at auction, now at a fixed price at least 10% below reserve. 48 hours only, first buyer gets it.",
     },
     "/catalogues": {

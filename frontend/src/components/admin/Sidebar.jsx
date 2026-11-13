@@ -84,8 +84,8 @@ const navigation = [
         icon: <FileText size={20} />
     },
     {
-        name: 'Buy It Now',
-        path: '/admin/buy-it-now',
+        name: 'Last Chance',
+        path: '/admin/last-chance',
         icon: <ShoppingCart size={20} />
     },
     {

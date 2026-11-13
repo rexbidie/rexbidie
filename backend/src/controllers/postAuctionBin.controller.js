@@ -1,4 +1,4 @@
-// Buy It Now after the auction – API (mounted at /api/v1/buy-it-now).
+// Last Chance after the auction – API (mounted at /api/v1/buy-it-now).
 // Rules: utils/postAuctionBin.js. Starting/buying/ending: services/postAuctionBinService.js.
 
 import mongoose from "mongoose";
@@ -38,7 +38,7 @@ const fail = (res, error, fallback) =>
 const loadLot = async (id) => (mongoose.isValidObjectId(id) ? Auction.findById(id) : null);
 const canManage = (user, auction) => !!user && (idStr(auction.seller) === idStr(user._id) || STAFF.has(user.userType));
 
-// GET /api/v1/buy-it-now?currency=EUR   – everything live on Buy It Now
+// GET /api/v1/buy-it-now?currency=EUR   – everything live on Last Chance
 export const listLive = async (req, res) => {
   try {
     const now = new Date();
@@ -78,8 +78,8 @@ export const listLive = async (req, res) => {
     });
     res.json({ success: true, data: { lots: data, hours: BIN_HOURS } });
   } catch (error) {
-    console.error("List Buy It Now error:", error);
-    res.status(500).json({ success: false, message: "Could not load Buy It Now" });
+    console.error("List Last Chance error:", error);
+    res.status(500).json({ success: false, message: "Could not load Last Chance" });
   }
 };
 
@@ -117,14 +117,14 @@ export const lotStatus = async (req, res) => {
         note: bin.note || null,
         startWindowHours: START_WINDOW_HOURS,
         startDeadline: auction.status === "reserve_not_met" ? startDeadlineFor(auction) : null,
-        // Top bid already within 10% of the reserve: Buy It Now can't work.
+        // Top bid already within 10% of the reserve: Last Chance can't work.
         blockedByTopBid: auction.status === "reserve_not_met" && top > 0 && max <= top,
       };
     }
     res.json({ success: true, data: out });
   } catch (error) {
-    console.error("Buy It Now status error:", error);
-    res.status(500).json({ success: false, message: "Could not load Buy It Now" });
+    console.error("Last Chance status error:", error);
+    res.status(500).json({ success: false, message: "Could not load Last Chance" });
   }
 };
 
@@ -135,7 +135,7 @@ export const setup = async (req, res) => {
   try {
     const auction = await loadLot(req.params.id);
     if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
-    if (!canManage(req.user, auction)) return res.status(403).json({ success: false, message: "Only the seller can set up Buy It Now." });
+    if (!canManage(req.user, auction)) return res.status(403).json({ success: false, message: "Only the seller can set up Last Chance." });
 
     const state = binStartState(auction);
     if (!state.allowed) return res.status(400).json({ success: false, message: state.reason });
@@ -147,14 +147,14 @@ export const setup = async (req, res) => {
       if (error) return res.status(400).json({ success: false, message: error });
       auction.postAuctionBin = { price, status: "scheduled", note: undefined };
       await auction.save();
-      return res.json({ success: true, message: "Saved. If the reserve isn't met, the lot goes on Buy It Now for 48 hours at this price.", data: { status: "scheduled" } });
+      return res.json({ success: true, message: "Saved. If the reserve isn't met, the lot goes on Last Chance for 48 hours at this price.", data: { status: "scheduled" } });
     }
 
     await startBin(auction, price, { startedBy: STAFF.has(req.user.userType) ? "admin" : "seller" });
-    res.json({ success: true, message: "Your lot is now on Buy It Now for 48 hours.", data: { status: "live", endsAt: auction.postAuctionBin.endsAt } });
+    res.json({ success: true, message: "Your lot is now on Last Chance for 48 hours.", data: { status: "live", endsAt: auction.postAuctionBin.endsAt } });
   } catch (error) {
-    console.error("Buy It Now setup error:", error);
-    fail(res, error, "Could not set up Buy It Now");
+    console.error("Last Chance setup error:", error);
+    fail(res, error, "Could not set up Last Chance");
   }
 };
 
@@ -164,11 +164,11 @@ export const lowerPrice = async (req, res) => {
     const auction = await loadLot(req.params.id);
     if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
     if (!canManage(req.user, auction)) return res.status(403).json({ success: false, message: "Only the seller can change the price." });
-    if (!binIsLive(auction)) return res.status(400).json({ success: false, message: "This lot isn't on Buy It Now." });
+    if (!binIsLive(auction)) return res.status(400).json({ success: false, message: "This lot isn't on Last Chance." });
 
     const price = toBase(req.body?.price, displayCurrencyFor(req, auction), auction.baseCurrency);
     if (!(price < auction.postAuctionBin.price)) {
-      return res.status(400).json({ success: false, message: "The price can only be lowered while the lot is on Buy It Now." });
+      return res.status(400).json({ success: false, message: "The price can only be lowered while the lot is on Last Chance." });
     }
     const error = binPriceError(auction, price, { atEnd: true });
     if (error) return res.status(400).json({ success: false, message: error });
@@ -182,13 +182,13 @@ export const lowerPrice = async (req, res) => {
     broadcastAuctionChange(auction._id);
     res.json({ success: true, message: "Price lowered." });
   } catch (error) {
-    console.error("Buy It Now lower price error:", error);
+    console.error("Last Chance lower price error:", error);
     fail(res, error, "Could not change the price");
   }
 };
 
 // DELETE /api/v1/buy-it-now/lot/:id/setup
-// Seller: remove a price set in advance. Staff: also take a live lot off Buy It Now.
+// Seller: remove a price set in advance. Staff: also take a live lot off Last Chance.
 export const cancel = async (req, res) => {
   try {
     const auction = await loadLot(req.params.id);
@@ -199,7 +199,7 @@ export const cancel = async (req, res) => {
     if (status === "scheduled") {
       auction.postAuctionBin = { status: null };
       await auction.save();
-      return res.json({ success: true, message: "Buy It Now price removed." });
+      return res.json({ success: true, message: "Last Chance price removed." });
     }
     if (status === "live" && STAFF.has(req.user.userType)) {
       const updated = await Auction.findOneAndUpdate(
@@ -209,14 +209,14 @@ export const cancel = async (req, res) => {
       );
       if (!updated) return res.status(409).json({ success: false, message: "This lot has just been sold." });
       broadcastAuctionChange(auction._id);
-      return res.json({ success: true, message: "Taken off Buy It Now." });
+      return res.json({ success: true, message: "Taken off Last Chance." });
     }
     if (status === "live") {
-      return res.status(400).json({ success: false, message: "Once a lot is on Buy It Now it stays for the full 48 hours. Contact RexBid if something has changed." });
+      return res.status(400).json({ success: false, message: "Once a lot is on Last Chance it stays for the full 48 hours. Contact RexBid if something has changed." });
     }
     res.status(400).json({ success: false, message: "There's nothing to cancel." });
   } catch (error) {
-    console.error("Buy It Now cancel error:", error);
+    console.error("Last Chance cancel error:", error);
     fail(res, error, "Could not cancel");
   }
 };
@@ -239,14 +239,14 @@ export const buy = async (req, res) => {
     await buyBin(auction._id, buyer, expected);
     res.json({ success: true, message: "Congratulations, it's yours! We've emailed you the next steps for payment and collection." });
   } catch (error) {
-    console.error("Buy It Now purchase error:", error);
+    console.error("Last Chance purchase error:", error);
     fail(res, error, "Could not complete the purchase");
   }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Admin → Buy It Now: invite sellers of unsold reserve lots (e.g. last night's
-// sale) to use Buy It Now. Nothing is sent until the admin presses Send.
+// Admin → Last Chance: invite sellers of unsold reserve lots (e.g. last night's
+// sale) to use Last Chance. Nothing is sent until the admin presses Send.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INVITE_WINDOW_HOURS = START_WINDOW_HOURS;
@@ -283,7 +283,7 @@ export const adminUnsold = async (req, res) => {
             invitedAt: a.postAuctionBin?.invitedAt || null,
             startDeadline: startDeadlineFor(a),
             eligible: state.allowed && !blocked && !a.postAuctionBin?.status,
-            reason: blocked ? "Top bid already within 10% of reserve" : a.postAuctionBin?.status ? `Buy It Now ${a.postAuctionBin.status}` : state.allowed ? null : state.reason,
+            reason: blocked ? "Top bid already within 10% of reserve" : a.postAuctionBin?.status ? `Last Chance ${a.postAuctionBin.status}` : state.allowed ? null : state.reason,
             seller: a.seller ? {
               _id: a.seller._id,
               name: [a.seller.firstName, a.seller.lastName].filter(Boolean).join(" "),
@@ -395,7 +395,7 @@ export const adminInviteSend = async (req, res) => {
   }
 };
 
-// GET /api/v1/buy-it-now/admin/sold   – Buy It Now sales in the last 14 days
+// GET /api/v1/buy-it-now/admin/sold   – Last Chance sales in the last 14 days
 export const adminRecentSales = async (req, res) => {
   try {
     const lots = await recentBinSales(14);
@@ -416,8 +416,8 @@ export const adminRecentSales = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Admin recent Buy It Now sales error:", error);
-    res.status(500).json({ success: false, message: "Could not load Buy It Now sales" });
+    console.error("Admin recent Last Chance sales error:", error);
+    res.status(500).json({ success: false, message: "Could not load Last Chance sales" });
   }
 };
 
@@ -434,12 +434,12 @@ export const adminUndo = async (req, res) => {
     res.json({
       success: true,
       message: result.endsAt
-        ? `Purchase undone. The lot is back on Buy It Now until ${new Date(result.endsAt).toLocaleString("en-IE", { timeZone: "Europe/Dublin", weekday: "short", hour: "numeric", minute: "2-digit" })}.`
+        ? `Purchase undone. The lot is back on Last Chance until ${new Date(result.endsAt).toLocaleString("en-IE", { timeZone: "Europe/Dublin", weekday: "short", hour: "numeric", minute: "2-digit" })}.`
         : "Purchase undone. The lot is unsold.",
       data: { endsAt: result.endsAt, saleRemoved: result.saleRemoved },
     });
   } catch (error) {
-    console.error("Undo Buy It Now error:", error);
+    console.error("Undo Last Chance error:", error);
     fail(res, error, "Could not undo the purchase");
   }
 };

@@ -9,6 +9,7 @@ import BinDashboardModal from "../../buyItNow/BinDashboardModal";
 import ListingExtrasPaymentModal from "../../listing/ListingExtrasPaymentModal";
 import IncrementModal from "./IncrementModal";
 import PromoteModal from "./PromoteModal";
+import { BuyItNowPriceModal, StartPriceModal } from "./PriceModals";
 
 // Seller / company / broker dashboard home: their listings first, with what
 // needs doing at the top. basePath is "/seller", "/company" or "/broker".
@@ -89,6 +90,8 @@ function MyListingsDashboard({ basePath }) {
     const [incrementLot, setIncrementLot] = useState(null);
     const [promote, setPromote] = useState(null);
     const [binLot, setBinLot] = useState(null);
+    const [binPriceLot, setBinPriceLot] = useState(null);
+    const [startLot, setStartLot] = useState(null);
     const [extras, setExtras] = useState(null);
     const now = useMemo(() => new Date(), [auctions]);
 
@@ -196,8 +199,8 @@ function MyListingsDashboard({ basePath }) {
                                 </>}
                                 {kind === "reserveNotMet" && <>
                                     <p className="font-semibold">{a.title}: reserve not met</p>
-                                    <p className="text-sm text-gray-600">Top bid {money(a.currentPrice, a.baseCurrency)}. Offer it on Buy It Now for 48 hours, or relist it.</p>
-                                    <div className="flex flex-wrap gap-2 mt-auto"><button type="button" className={btnPrimary} onClick={() => setBinLot(a)}>Start Buy It Now</button><Link className={btnSecondary} to={`${basePath}/auctions/edit/${a._id}`}>Relist</Link></div>
+                                    <p className="text-sm text-gray-600">Top bid {money(a.currentPrice, a.baseCurrency)}. Offer it on Last Chance at a fixed price for 48 hours, or relist it.</p>
+                                    <div className="flex flex-wrap gap-2 mt-auto"><button type="button" className={btnPrimary} onClick={() => setBinLot(a)}>Start Last Chance</button><Link className={btnSecondary} to={`${basePath}/auctions/edit/${a._id}`}>Relist</Link></div>
                                 </>}
                             </div>
                         ))}
@@ -245,6 +248,11 @@ function MyListingsDashboard({ basePath }) {
                             const canEdit = !SOLD.includes(a.status);
                             const canLowerReserve = a.auctionType === "reserve" && a.status === "active";
                             const canIncrement = isTimed(a) && CAN_CHANGE_INCREMENT.includes(a.status) && !a.winner;
+                            const canLowerStart = isTimed(a) && CAN_CHANGE_INCREMENT.includes(a.status) && !a.winner && !(Number(a.bidCount) > 0);
+                            // Buy It Now during the auction: reserve lots, until 12h before close
+                            // or bidding reaches 90% of the reserve (backend utils/liveBuyNow.js).
+                            const binOpen = new Date(a.endDate) - now > 12 * 36e5 && (!(Number(a.bidCount) > 0) || Number(a.currentPrice) < 0.9 * Number(a.reservePrice));
+                            const canSetBin = a.auctionType === "reserve" && CAN_CHANGE_INCREMENT.includes(a.status) && !a.winner && (a.status !== "active" || binOpen);
                             const featured = a.isFeatured || (a.featuredRequested && a.extrasPayment?.status === "completed");
                             const photo = a.photos?.[0]?.thumbUrl || a.photos?.[0]?.url;
                             const menuOpen = menuId === a._id;
@@ -260,6 +268,7 @@ function MyListingsDashboard({ basePath }) {
                                                 <span className={`text-xs font-semibold rounded-full px-2.5 py-0.5 ${chipCls}`}>{chip}</span>
                                                 {featured && <span className="text-xs font-semibold rounded-full px-2.5 py-0.5 bg-[#FDF2DD] text-[#7A5418]">Featured</span>}
                                                 {a.pendingEdit?.status === "pending" && <span className="text-xs font-semibold rounded-full px-2.5 py-0.5 bg-[#E7EEF8] text-[#23446E]">Changes waiting for approval</span>}
+                                                {a.liveBuyNow?.price > 0 && !SOLD.includes(a.status) && <span className="text-xs font-semibold rounded-full px-2.5 py-0.5 bg-[#FFF3C4] text-[#5C4A00]">Buy It Now {money(a.liveBuyNow.price, a.baseCurrency)}</span>}
                                             </div>
                                             <p className="text-sm text-gray-600">
                                                 {!isTimed(a) ? "Buy It Now listing"
@@ -307,10 +316,12 @@ function MyListingsDashboard({ basePath }) {
                                                         Meta Boost <span className="text-gray-500">{metaFrom(a.baseCurrency)}</span>
                                                     </button>
                                                 )}
+                                                {canSetBin && <button role="menuitem" type="button" className="min-h-[44px] flex items-center justify-between rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setBinPriceLot(a); }}>{a.liveBuyNow?.price ? "Change Buy It Now price" : "Set Buy It Now price"}{a.liveBuyNow?.price ? <span className="text-gray-500">{money(a.liveBuyNow.price, a.baseCurrency)}</span> : null}</button>}
+                                                {canLowerStart && <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setStartLot(a); }}>Lower starting bid</button>}
                                                 {canIncrement && <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setIncrementLot(a); }}>Change bid increment</button>}
                                                 {canLowerReserve && <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setReserveLot(a); }}>Lower reserve</button>}
                                                 {a.auctionType === "reserve" && BIN_AFTER_STATUSES.includes(a.status) && (
-                                                    <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setBinLot(a); }}>Buy It Now if the reserve isn't met</button>
+                                                    <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); setBinLot(a); }}>Last Chance (48 hours)</button>
                                                 )}
                                                 {a.status === "awaiting_payment" && <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left hover:bg-gray-50" onClick={() => { setMenuId(null); submitWithout(a); }}>Submit without extras</button>}
                                                 {a.pendingEdit?.status === "pending" && <button role="menuitem" type="button" className="min-h-[44px] flex items-center rounded-lg px-3 text-left text-red-700 hover:bg-red-50" onClick={() => { setMenuId(null); discardEdit(a); }}>Discard changes waiting for approval</button>}
@@ -327,6 +338,8 @@ function MyListingsDashboard({ basePath }) {
             {reserveLot && (
                 <LowerReserveModal isOpen onClose={() => setReserveLot(null)} auction={reserveLot} onReserveLowered={() => { setReserveLot(null); load(); }} />
             )}
+            {binPriceLot && <BuyItNowPriceModal auction={binPriceLot} onClose={() => setBinPriceLot(null)} onChanged={load} />}
+            {startLot && <StartPriceModal auction={startLot} onClose={() => setStartLot(null)} onChanged={load} />}
             {incrementLot && <IncrementModal auction={incrementLot} onClose={() => setIncrementLot(null)} onChanged={load} />}
             {promote && <PromoteModal auction={promote.auction} start={promote.start} onClose={() => setPromote(null)} onDone={load} />}
             {binLot && <BinDashboardModal auction={binLot} onClose={() => { setBinLot(null); load(); }} />}

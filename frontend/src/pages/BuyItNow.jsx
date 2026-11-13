@@ -33,7 +33,7 @@ const LotCard = ({ lot, now }) => {
                     <p className="text-sm text-gray-500 mt-1 flex items-center gap-1"><MapPin size={13} /> {lot.location}</p>
                 )}
                 <div className="mt-auto pt-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-500">Buy It Now</p>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Last Chance</p>
                     <p className="text-2xl font-bold text-gray-900">
                         {money(lot.price, lot.displayCurrency)}
                         {lot.vatIncluded && <span className="text-xs font-normal text-gray-500 ml-1">+ VAT</span>}
@@ -73,7 +73,7 @@ const BuyItNow = () => {
         <Container>
             <section className="pt-28 pb-16">
                 <div className="max-w-3xl">
-                    <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Buy It Now</h1>
+                    <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Last Chance</h1>
                     <p className="text-gray-600 mt-3">
                         Machinery that just missed its reserve at auction, now offered by the seller at a fixed price, at least 10% below their reserve.
                         Each lot is here for 48 hours. The first buyer to confirm gets it.
@@ -91,9 +91,9 @@ const BuyItNow = () => {
                     ) : live.length === 0 ? (
                         <div className="text-center py-16 border border-dashed border-gray-300 rounded-lg">
                             <ShoppingCart size={40} className="mx-auto text-gray-300 mb-3" />
-                            <p className="font-medium text-gray-800">Nothing on Buy It Now right now</p>
+                            <p className="font-medium text-gray-800">Nothing on Last Chance right now</p>
                             <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-                                Lots appear here after an auction ends without meeting its reserve. Watch or bid on a lot and we'll email you if it comes up on Buy It Now.
+                                Lots appear here after an auction ends without meeting its reserve. Watch or bid on a lot and we'll email you if it comes up on Last Chance.
                             </p>
                             <Link to="/auctions" className="inline-block mt-5 px-5 py-2.5 bg-black text-white rounded-md text-sm">Browse live auctions</Link>
                         </div>

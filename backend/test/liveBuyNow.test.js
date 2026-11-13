@@ -29,9 +29,9 @@ test("only reserve auctions, and no price means no Buy It Now", () => {
   assert.equal(livePriceError({ auctionType: "reserve", reservePrice: 10000, price: 0 }), null);
 });
 
-test("after bids it can be lowered but not added or raised", () => {
+test("after bids it can be added or lowered but not raised", () => {
   const base = { auctionType: "reserve", reservePrice: 10000, bidCount: 3 };
-  assert.match(livePriceError({ ...base, price: 12000, previous: null }), /can't be added/);
+  assert.equal(livePriceError({ ...base, price: 12000, previous: null }), null);
   assert.match(livePriceError({ ...base, price: 13000, previous: 12000 }), /can't be raised/);
   assert.equal(livePriceError({ ...base, price: 11800, previous: 12000 }), null);
 });

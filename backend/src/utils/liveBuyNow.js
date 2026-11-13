@@ -9,7 +9,7 @@
 // Rules:
 //   - reserve auctions only (not no-reserve auctions)
 //   - the price must be at least 15% above the reserve
-//   - once there are bids it can't be added or raised (lowering is fine)
+//   - once there are bids it can be added, lowered or removed, but not raised
 //
 // Buying ends the auction straight away and the normal sale process follows.
 // Separate from Buy It Now after an unsold auction (utils/postAuctionBin.js).
@@ -46,8 +46,7 @@ export const livePriceError = ({ auctionType, reservePrice, price, previous = nu
   if (p < min) return `The Buy It Now price must be at least 15% above the reserve (${min} or more).`;
   if (Number(bidCount) > 0) {
     const prev = Number(previous) || 0;
-    if (!prev) return "A Buy It Now price can't be added once bidding has started.";
-    if (p > prev) return "The Buy It Now price can't be raised once bidding has started.";
+    if (prev && p > prev) return "The Buy It Now price can't be raised once bidding has started. You can lower or remove it.";
   }
   return null;
 };

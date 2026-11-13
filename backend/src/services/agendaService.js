@@ -218,7 +218,7 @@ class AgendaService {
                 const { handleReserveNotMet } = await import("./postAuctionBinService.js");
                 binStarted = await handleReserveNotMet(auctionId);
               } catch (err) {
-                console.error(`Buy It Now start failed for ${auctionId}:`, err.message);
+                console.error(`Last Chance start failed for ${auctionId}:`, err.message);
               }
             }
 
@@ -441,7 +441,7 @@ class AgendaService {
       try {
         const { expireBins } = await import("./postAuctionBinService.js");
         const expired = await expireBins();
-        if (expired) console.log(`Buy It Now: ${expired} ended without a sale`);
+        if (expired) console.log(`Last Chance: ${expired} ended without a sale`);
       } catch (error) {
         console.error("Agenda job error (end post-auction buy it now):", error);
       }

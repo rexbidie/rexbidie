@@ -192,7 +192,9 @@ createRoot(document.getElementById('root')).render(
 
                         <Route path='/catalogues' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Catalogues /></Suspense>} />
 
-                        <Route path='/buy-it-now' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><BuyItNow /></Suspense>} />
+                        <Route path='/last-chance' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><BuyItNow /></Suspense>} />
+                        {/* Old name of Last Chance */}
+                        <Route path='/buy-it-now' element={<Navigate to='/last-chance' replace />} />
 
                         <Route path='/notifications' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Notifications /></Suspense>} />
 
@@ -658,9 +660,9 @@ createRoot(document.getElementById('root')).render(
                             }
                         />
 
-                        {/* Admin Buy It Now */}
+                        {/* Admin Last Chance (Buy It Now after the auction) */}
                         <Route
-                            path='/admin/buy-it-now'
+                            path='/admin/last-chance'
                             element={
                                 <Suspense fallback={<LoadingSpinner height={'750px'} />}>
                                     <AdminBuyItNow />

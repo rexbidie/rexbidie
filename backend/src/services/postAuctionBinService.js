@@ -1,4 +1,4 @@
-// Buy It Now after the auction: starting, buying, ending and notifications.
+// Last Chance after the auction: starting, buying, ending and notifications.
 // Rules live in utils/postAuctionBin.js.
 
 import Auction from "../models/auction.model.js";
@@ -22,7 +22,7 @@ const idStr = (v) => (v && typeof v === "object" ? v._id ?? v : v)?.toString?.()
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
-/** Everyone to tell when a lot goes on Buy It Now (deduplicated, seller excluded). */
+/** Everyone to tell when a lot goes on Last Chance (deduplicated, seller excluded). */
 const audienceFor = async (auction) => {
   const sellerId = idStr(auction.seller);
   const topBidderId = topBidOf(auction) > 0 ? idStr(auction.currentBidder) : null;
@@ -60,13 +60,13 @@ const notifyLive = async (auction) => {
 };
 
 /**
- * Puts a reserve-not-met lot on Buy It Now for BIN_HOURS.
+ * Puts a reserve-not-met lot on Last Chance for BIN_HOURS.
  * @param {import("mongoose").Document} auction
  */
 export const startBin = async (auction, price, { startedBy = "seller" } = {}) => {
   const error = binPriceError(auction, price, { atEnd: true });
   if (error) throw httpError(400, error);
-  if (auction.status !== "reserve_not_met" || auction.winner) throw httpError(400, "This lot can't go on Buy It Now.");
+  if (auction.status !== "reserve_not_met" || auction.winner) throw httpError(400, "This lot can't go on Last Chance.");
 
   const now = new Date();
   auction.postAuctionBin = {
@@ -83,7 +83,7 @@ export const startBin = async (auction, price, { startedBy = "seller" } = {}) =>
     const { default: agendaService } = await import("./agendaService.js");
     await agendaService.scheduleBinEnd?.(auction._id, auction.postAuctionBin.endsAt);
   } catch (e) {
-    console.error("Could not schedule Buy It Now end (the 15-minute sweep will catch it):", e.message);
+    console.error("Could not schedule Last Chance end (the 15-minute sweep will catch it):", e.message);
   }
 
   broadcastAuctionChange(auction._id);
@@ -93,7 +93,7 @@ export const startBin = async (auction, price, { startedBy = "seller" } = {}) =>
 
 /**
  * Called when an auction ends with the reserve not met.
- * Returns true when Buy It Now started automatically (a price was set in advance).
+ * Returns true when Last Chance started automatically (a price was set in advance).
  */
 export const handleReserveNotMet = async (auctionId) => {
   const auction = await Auction.findById(auctionId);
@@ -114,7 +114,7 @@ export const handleReserveNotMet = async (auctionId) => {
     return false;
   }
 
-  // No price set in advance: invite the seller, unless Buy It Now can't work
+  // No price set in advance: invite the seller, unless Last Chance can't work
   // because the top bid is already within 10% of the reserve.
   if (!bin.status && seller && !binPriceError(auction, Math.max(1, topBidOf(auction) + 1), { atEnd: true })) {
     postAuctionBinSellerEmail(seller, auction, "invite").catch(() => {});
@@ -123,7 +123,7 @@ export const handleReserveNotMet = async (auctionId) => {
   return false;
 };
 
-/** Buys a lot on Buy It Now. First buyer to confirm wins. */
+/** Buys a lot on Last Chance. First buyer to confirm wins. */
 export const buyBin = async (auctionId, buyer, expectedPriceInBase) => {
   const now = new Date();
   const claimed = await Auction.findOneAndUpdate(
@@ -141,7 +141,7 @@ export const buyBin = async (auctionId, buyer, expectedPriceInBase) => {
   if (!claimed) {
     const lot = await Auction.findById(auctionId).select("seller").lean();
     if (lot && idStr(lot.seller) === idStr(buyer._id)) throw httpError(400, "You can't buy your own lot.");
-    throw httpError(409, "Sorry, this lot has just been sold or its Buy It Now has ended.");
+    throw httpError(409, "Sorry, this lot has just been sold or its Last Chance has ended.");
   }
 
   try {
@@ -167,7 +167,7 @@ export const buyBin = async (auctionId, buyer, expectedPriceInBase) => {
     for (const o of claimed.offers || []) {
       if (o.status === "pending") {
         o.status = "rejected";
-        o.sellerResponse = "Offer closed - item bought on Buy It Now";
+        o.sellerResponse = "Offer closed - item bought on Last Chance";
       }
     }
 
@@ -177,7 +177,7 @@ export const buyBin = async (auctionId, buyer, expectedPriceInBase) => {
     claimed.postAuctionBin.endedAt = now;
     await claimed.save(); // creates the sale record (auction model hooks)
   } catch (error) {
-    // Put it back on Buy It Now so someone else can buy it.
+    // Put it back on Last Chance so someone else can buy it.
     await Auction.updateOne(
       { _id: auctionId, "postAuctionBin.status": "processing" },
       { $set: { "postAuctionBin.status": "live" } }
@@ -201,12 +201,12 @@ export const buyBin = async (auctionId, buyer, expectedPriceInBase) => {
     await sendAuctionEndedSellerEmail(sold);
     const admins = await User.find({ userType: "admin" }).select("email currency");
     for (const admin of admins) await auctionWonAdminEmail(admin.email, admin.currency, sold, sold.winner);
-  })().catch((e) => console.error("Buy It Now sale emails failed:", e));
+  })().catch((e) => console.error("Last Chance sale emails failed:", e));
 
   return claimed;
 };
 
-/** Ends Buy It Now windows that have run out. Safe to run repeatedly. */
+/** Ends Last Chance windows that have run out. Safe to run repeatedly. */
 export const expireBins = async (now = new Date()) => {
   const due = await Auction.find({
     "postAuctionBin.status": { $in: ["live", "processing"] },
@@ -219,7 +219,7 @@ export const expireBins = async (now = new Date()) => {
     const soldOtherwise = auction.status !== "reserve_not_met" || !!auction.winner;
     auction.postAuctionBin.status = soldOtherwise ? "cancelled" : "expired";
     auction.postAuctionBin.endedAt = now;
-    if (soldOtherwise) auction.postAuctionBin.note = "Lot sold another way during Buy It Now";
+    if (soldOtherwise) auction.postAuctionBin.note = "Lot sold another way during Last Chance";
     await auction.save();
     broadcastAuctionChange(auction._id);
     if (!soldOtherwise) {
@@ -234,10 +234,10 @@ export const expireBins = async (now = new Date()) => {
 export const isLive = binIsLive;
 
 /**
- * Admin: reverses a Buy It Now purchase that hasn't been paid (e.g. a test or
+ * Admin: reverses a Last Chance purchase that hasn't been paid (e.g. a test or
  * accidental purchase). Cancels any Stripe payment request, removes the sale
  * record (a copy is kept on the lot), returns the lot to "reserve not met" and,
- * if asked, puts it back on Buy It Now for the time it had left.
+ * if asked, puts it back on Last Chance for the time it had left.
  * @param {{ reason: string, relist: boolean, notifySeller: boolean }} opts
  */
 export const undoBinPurchase = async (auctionId, admin, { reason, relist = true, notifySeller = true } = {}) => {
@@ -245,7 +245,7 @@ export const undoBinPurchase = async (auctionId, admin, { reason, relist = true,
   const auction = await Auction.findById(auctionId);
   if (!auction) throw httpError(404, "Lot not found");
   const bin = auction.postAuctionBin || {};
-  if (bin.status !== "sold" || auction.status !== "sold") throw httpError(400, "This lot wasn't bought on Buy It Now.");
+  if (bin.status !== "sold" || auction.status !== "sold") throw httpError(400, "This lot wasn't bought on Last Chance.");
   if (auction.paymentStatus === "completed") throw httpError(409, "This sale has been paid. Refund it before undoing.");
 
   const sale = await Sale.findOne({ auction: auction._id });
@@ -330,7 +330,7 @@ export const undoBinPurchase = async (auctionId, admin, { reason, relist = true,
   return { auction, saleRemoved: !!sale, endsAt: relist ? auction.postAuctionBin.endsAt : null };
 };
 
-/** Admin: recent Buy It Now sales (for the undo list). */
+/** Admin: recent Last Chance sales (for the undo list). */
 export const recentBinSales = async (days = 14) => {
   const since = new Date(Date.now() - days * 864e5);
   return Auction.find({ "postAuctionBin.status": "sold", "postAuctionBin.soldAt": { $gte: since } })

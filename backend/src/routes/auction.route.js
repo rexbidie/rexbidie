@@ -9,6 +9,8 @@ import {
     buyLiveBuyNow,
     submitListingWithoutExtras,
     changeBidIncrement,
+    setLiveBuyNowPrice,
+    lowerStartPrice,
     discardPendingEdit,
     getPromotionOptions,
     startListingPromotion,
@@ -64,6 +66,8 @@ auctionRouter.get('/extras/pricing', getListingExtrasPricing);
 auctionRouter.post("/:id/retry-extras-payment", authSeller, retryExtrasPayment);
 auctionRouter.post("/:id/submit-without-extras", authSeller, submitListingWithoutExtras);
 auctionRouter.patch("/:id/increment", authSeller, changeBidIncrement);
+auctionRouter.patch("/:id/live-buy-now-price", authSeller, setLiveBuyNowPrice);
+auctionRouter.patch("/:id/start-price", authSeller, lowerStartPrice);
 auctionRouter.delete("/:id/pending-edit", authSeller, discardPendingEdit);
 auctionRouter.get("/:id/promote", authSeller, getPromotionOptions);
 auctionRouter.post("/:id/promote", authSeller, startListingPromotion);

@@ -4425,20 +4425,20 @@ const questionAnsweredEmail = async (recipient, listing, question, answer, answe
 };
 
 // ============================================
-// BUY IT NOW AFTER THE AUCTION
+// LAST CHANCE AFTER THE AUCTION
 // ============================================
 
 const binHoursLeft = (endsAt) => Math.max(1, Math.round((new Date(endsAt) - Date.now()) / 36e5));
 
-// To buyers: a lot they bid on, watched or asked about is on Buy It Now.
+// To buyers: a lot they bid on, watched or asked about is on Last Chance.
 const postAuctionBinBuyerEmail = async (recipient, listing, { price, currency, endsAt, isTopBidder }) => {
     notifyLater({
         user: recipient?._id,
         email: recipient?.email,
         type: "buyItNow",
-        title: isTopBidder ? "You can now buy the lot you bid on" : "Now on Buy It Now",
+        title: isTopBidder ? "You can now buy the lot you bid on" : "Now on Last Chance",
         body: `${listing?.title || "A lot you followed"} is available for ${formatCurrency(price, currency)} for 48 hours. First to confirm wins.`,
-        url: "/buy-it-now",
+        url: "/last-chance",
         dedupeKey: `buyItNow:${listing?._id}`,
     });
     const type = isTopBidder ? "postAuctionBinTopBidder" : "postAuctionBin";
@@ -4446,10 +4446,10 @@ const postAuctionBinBuyerEmail = async (recipient, listing, { price, currency, e
     try {
         const priceText = formatCurrency(price, currency);
         const content = `
-            <h2 style="text-align: center;">${isTopBidder ? "You can now buy the lot you bid on" : "Now on Buy It Now"}</h2>
+            <h2 style="text-align: center;">${isTopBidder ? "You can now buy the lot you bid on" : "Now on Last Chance"}</h2>
             <p style="text-align: center;"><strong>${escapeHtml(listing?.title)}</strong></p>
             ${createInfoCard(`
-                ${createSummaryRow("Buy It Now price:", priceText)}
+                ${createSummaryRow("Last Chance price:", priceText)}
                 ${createSummaryRow("Available for:", `${binHoursLeft(endsAt)} more hours`)}
             `)}
             <p>${isTopBidder
@@ -4457,25 +4457,25 @@ const postAuctionBinBuyerEmail = async (recipient, listing, { price, currency, e
                 : "The auction didn't reach the seller's reserve, so the seller is now offering it at a fixed price."}
                The first buyer to confirm gets it. The usual buyer fee applies and payment is protected through RexBid.</p>
             <div style="text-align: center; margin: 25px 0;">
-                ${createButton("View Buy It Now", `${FRONTEND_URL}/auction/${listing?._id}`, "primary")}
+                ${createButton("View the lot", `${FRONTEND_URL}/auction/${listing?._id}`, "primary")}
             </div>
-            <p style="text-align: center; font-size: 13px; color: ${BRAND_COLORS.textLight};">See everything on Buy It Now: <a href="${FRONTEND_URL}/buy-it-now">${FRONTEND_URL.replace(/^https?:\/\//, "")}/buy-it-now</a></p>
+            <p style="text-align: center; font-size: 13px; color: ${BRAND_COLORS.textLight};">See everything on Last Chance: <a href="${FRONTEND_URL}/last-chance">${FRONTEND_URL.replace(/^https?:\/\//, "")}/last-chance</a></p>
         `;
         const info = await transporter.sendMail({
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: recipient?.email,
-            subject: `${isTopBidder ? "You can buy it now: " : "Now on Buy It Now: "}${listing?.title} – ${priceText}`,
-            html: baseTemplate(content, "Buy It Now"),
+            subject: `${isTopBidder ? "You can buy it now: " : "Now on Last Chance: "}${listing?.title} – ${priceText}`,
+            html: baseTemplate(content, "Last Chance"),
         });
         return !!info;
     } catch (error) {
-        console.error("Failed to send Buy It Now buyer email:", error);
+        console.error("Failed to send Last Chance buyer email:", error);
         return false;
     }
 };
 
 // To the seller about their own lot.
-//   kind: "invite" (reserve not met, offer Buy It Now), "live", "expired", "not_started"
+//   kind: "invite" (reserve not met, offer Last Chance), "live", "expired", "not_started"
 const postAuctionBinSellerEmail = async (seller, listing, kind, { price, currency, endsAt, reason } = {}) => {
     if (!(await canSendEmail(seller?.email, "postAuctionBinSeller"))) return false;
     const dashboard = `${FRONTEND_URL}/${seller?.userType === "company" ? "company" : seller?.userType === "broker" ? "broker" : "seller"}/auctions/all`;
@@ -4484,56 +4484,56 @@ const postAuctionBinSellerEmail = async (seller, listing, kind, { price, currenc
     const priceText = price != null ? formatCurrency(price, currency) : "";
     const copy = {
         invite: {
-            subject: `Reserve not met – offer it on Buy It Now: ${listing?.title}`,
-            heading: "Your reserve wasn't met. Try Buy It Now",
+            subject: `Reserve not met – offer it on Last Chance: ${listing?.title}`,
+            heading: "Your reserve wasn't met. Try Last Chance",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p><strong>${title}</strong> didn't reach your reserve. You can offer it on the RexBid Buy It Now page for 48 hours at a fixed price.</p>
+                <p><strong>${title}</strong> didn't reach your reserve. You can offer it on the RexBid Last Chance page for 48 hours at a fixed price.</p>
                 <ul>
                     <li>The price must be at least 10% below your reserve and above the top bid.</li>
                     <li>We tell the bidders, watchers and everyone who asked about it.</li>
                     <li>The first buyer to confirm buys it, and the sale goes through RexBid as normal.</li>
                 </ul>
-                <p>You can start it from your dashboard for the next 72 hours. Open the lot's menu and choose <strong>Buy It Now (48 hours)</strong>.</p>`,
+                <p>You can start it from your dashboard for the next 72 hours. Open the lot's menu and choose <strong>Last Chance (48 hours)</strong>.</p>`,
             button: "Go to my auctions",
         },
         live: {
-            subject: `Now on Buy It Now: ${listing?.title}`,
-            heading: "Your lot is on Buy It Now",
+            subject: `Now on Last Chance: ${listing?.title}`,
+            heading: "Your lot is on Last Chance",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p><strong>${title}</strong> is now on Buy It Now at <strong>${priceText}</strong> for ${binHoursLeft(endsAt)} hours. We've told the bidders, watchers and everyone who asked about it.</p>
+                <p><strong>${title}</strong> is now on Last Chance at <strong>${priceText}</strong> for ${binHoursLeft(endsAt)} hours. We've told the bidders, watchers and everyone who asked about it.</p>
                 <p>If it sells we'll email you straight away, and the sale follows the usual RexBid process.</p>`,
             button: "View the listing",
             url: `${FRONTEND_URL}/auction/${listing?._id}`,
         },
         expired: {
-            subject: `Buy It Now ended without a sale: ${listing?.title}`,
-            heading: "Buy It Now ended without a sale",
+            subject: `Last Chance ended without a sale: ${listing?.title}`,
+            heading: "Last Chance ended without a sale",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p>The 48 hours on Buy It Now for <strong>${title}</strong> have ended without a buyer. You can relist it in a future sale from your dashboard. Our team is happy to advise on the reserve.</p>`,
+                <p>The 48 hours on Last Chance for <strong>${title}</strong> have ended without a buyer. You can relist it in a future sale from your dashboard. Our team is happy to advise on the reserve.</p>`,
             button: "Go to my auctions",
         },
         undone: {
-            subject: `Buy It Now sale cancelled: ${listing?.title}`,
-            heading: "The Buy It Now sale has been cancelled",
+            subject: `Last Chance sale cancelled: ${listing?.title}`,
+            heading: "The Last Chance sale has been cancelled",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p>Sorry for the confusion. The Buy It Now purchase of <strong>${title}</strong> was made in error and has been cancelled by RexBid, so the lot has <strong>not</strong> been sold. Please ignore the earlier "item sold" email. There's nothing you need to do.</p>
+                <p>Sorry for the confusion. The Last Chance purchase of <strong>${title}</strong> was made in error and has been cancelled by RexBid, so the lot has <strong>not</strong> been sold. Please ignore the earlier "item sold" email. There's nothing you need to do.</p>
                 <p>The lot is unsold. You can relist it from your dashboard, and we're happy to help.</p>`,
             button: "Go to my auctions",
         },
         undone_relisted: {
-            subject: `Buy It Now sale cancelled – your lot is back on Buy It Now: ${listing?.title}`,
-            heading: "The Buy It Now sale has been cancelled",
+            subject: `Last Chance sale cancelled – your lot is back on Last Chance: ${listing?.title}`,
+            heading: "The Last Chance sale has been cancelled",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p>Sorry for the confusion. The Buy It Now purchase of <strong>${title}</strong> was made in error and has been cancelled by RexBid, so the lot has <strong>not</strong> been sold. Please ignore the earlier "item sold" email. There's nothing you need to do.</p>
-                <p>Your lot is back on Buy It Now at <strong>${priceText}</strong> for another ${binHoursLeft(endsAt)} hours. If it sells, we'll email you straight away.</p>`,
+                <p>Sorry for the confusion. The Last Chance purchase of <strong>${title}</strong> was made in error and has been cancelled by RexBid, so the lot has <strong>not</strong> been sold. Please ignore the earlier "item sold" email. There's nothing you need to do.</p>
+                <p>Your lot is back on Last Chance at <strong>${priceText}</strong> for another ${binHoursLeft(endsAt)} hours. If it sells, we'll email you straight away.</p>`,
             button: "View the listing",
             url: `${FRONTEND_URL}/auction/${listing?._id}`,
         },
         not_started: {
-            subject: `Buy It Now didn't start: ${listing?.title}`,
-            heading: "Your Buy It Now price couldn't be used",
+            subject: `Last Chance didn't start: ${listing?.title}`,
+            heading: "Your Last Chance price couldn't be used",
             body: `<p>Hi ${escapeHtml(name)},</p>
-                <p>The reserve on <strong>${title}</strong> wasn't met, but the Buy It Now price you set couldn't be used: ${escapeHtml(reason || "")}</p>
+                <p>The reserve on <strong>${title}</strong> wasn't met, but the Last Chance price you set couldn't be used: ${escapeHtml(reason || "")}</p>
                 <p>You can set a new price from your dashboard within 72 hours.</p>`,
             button: "Go to my auctions",
         },
@@ -4551,16 +4551,16 @@ const postAuctionBinSellerEmail = async (seller, listing, kind, { price, currenc
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: seller?.email,
             subject: copy.subject,
-            html: baseTemplate(content, "Buy It Now"),
+            html: baseTemplate(content, "Last Chance"),
         });
         return !!info;
     } catch (error) {
-        console.error("Failed to send Buy It Now seller email:", error);
+        console.error("Failed to send Last Chance seller email:", error);
         return false;
     }
 };
 
-// Seller invite: "your lot didn't reach its reserve, put it on Buy It Now".
+// Seller invite: "your lot didn't reach its reserve, put it on Last Chance".
 // One email per seller listing each of their unsold reserve lots.
 // lots: [{ _id, title, currency, topBid, maxPrice }], deadline: Date to start by.
 const renderBinInviteEmail = (seller, lots, { deadline } = {}) => {
@@ -4577,35 +4577,35 @@ const renderBinInviteEmail = (seller, lots, { deadline } = {}) => {
             <p style="margin: 0 0 6px 0; font-weight: bold;"><a href="${FRONTEND_URL}/auction/${l._id}" style="color: ${BRAND_COLORS.secondary};">${escapeHtml(l.title)}</a></p>
             <p style="margin: 0; font-size: 14px; color: ${BRAND_COLORS.text};">
                 Top bid: <strong>${l.topBid ? formatCurrency(l.topBid, l.currency) : "no bids"}</strong>
-                &nbsp;·&nbsp; Buy It Now price up to <strong>${formatCurrency(l.maxPrice, l.currency)}</strong> (10% below your reserve)
+                &nbsp;·&nbsp; Last Chance price up to <strong>${formatCurrency(l.maxPrice, l.currency)}</strong> (10% below your reserve)
             </p>
         </div>`).join("");
 
     const content = `
-        <h2 style="text-align: center;">${many ? "Your lots" : "Your lot"} didn't reach the reserve. Try Buy It Now</h2>
+        <h2 style="text-align: center;">${many ? "Your lots" : "Your lot"} didn't reach the reserve. Try Last Chance</h2>
         <p>Hi ${escapeHtml(name)},</p>
         <p>Thanks for selling with RexBid. In last night's sale ${many ? "these lots" : "this lot"} didn't reach your reserve:</p>
         ${rows}
-        <p style="margin-top: 20px;"><strong>New on RexBid: Buy It Now.</strong> You can now offer an unsold lot at a fixed price for 48 hours on our Buy It Now page, which is also shown at the top of the RexBid homepage.</p>
+        <p style="margin-top: 20px;"><strong>New on RexBid: Last Chance.</strong> You can now offer an unsold lot at a fixed price for 48 hours on our Last Chance page, which is also shown at the top of the RexBid homepage.</p>
         <ul style="padding-left: 20px;">
             <li>You choose the price. It must be at least 10% below your reserve and above the top bid.</li>
             <li>We email the bidders, watchers and everyone who asked about the lot.</li>
             <li>The first buyer to confirm buys it, and the sale goes through RexBid as normal, with payment protected and no extra fee for you.</li>
         </ul>
-        ${deadlineText ? `<p><strong>You can start Buy It Now until ${escapeHtml(deadlineText)}.</strong> Open the lot's menu in your dashboard and choose <em>Buy It Now (48 hours)</em>.</p>` : ""}
+        ${deadlineText ? `<p><strong>You can start Last Chance until ${escapeHtml(deadlineText)}.</strong> Open the lot's menu in your dashboard and choose <em>Last Chance (48 hours)</em>.</p>` : ""}
         <div style="text-align: center; margin: 25px 0 12px 0;">
-            ${createButton("Set my Buy It Now price", dashboard, "primary")}
+            ${createButton("Set my Last Chance price", dashboard, "primary")}
         </div>
         <p style="text-align: center; margin: 0 0 20px 0;">
-            <a href="${FRONTEND_URL}/buy-it-now" style="color: ${BRAND_COLORS.primary}; font-weight: bold;">See the Buy It Now page</a>
+            <a href="${FRONTEND_URL}/last-chance" style="color: ${BRAND_COLORS.primary}; font-weight: bold;">See the Last Chance page</a>
         </p>
         <p style="font-size: 13px; color: ${BRAND_COLORS.textLight};">Not sure what price to set? Reply to this email or contact us and we'll help.</p>
     `;
     return {
         subject: many
-            ? "Your lots didn't reach the reserve – try Buy It Now for 48 hours"
-            : `Didn't reach the reserve – try Buy It Now: ${lots[0]?.title || ""}`,
-        html: baseTemplate(content, "Buy It Now"),
+            ? "Your lots didn't reach the reserve – try Last Chance for 48 hours"
+            : `Didn't reach the reserve – try Last Chance: ${lots[0]?.title || ""}`,
+        html: baseTemplate(content, "Last Chance"),
     };
 };
 
