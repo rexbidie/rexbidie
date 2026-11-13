@@ -32,6 +32,7 @@ import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/axiosInstance';
 import { validateMinStart, validateMinReserve, minimumsHint } from '../../utils/listingRules';
 import { minLivePrice, CLOSE_CUTOFF_HOURS } from '../../utils/liveBuyNow';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -490,6 +491,7 @@ const EditAuction = () => {
     const [parentCategories, setParentCategories] = useState([]);
     const [subCategories, setSubCategories] = useState([]);
     const [selectedParent, setSelectedParent] = useState(null);
+    const { user } = useAuth();
     const [categoryFields, setCategoryFields] = useState([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
     const [loadingFields, setLoadingFields] = useState(false);
