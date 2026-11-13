@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { onExtrasPaid } from "../services/listingExtrasService.js";
 import Auction from "../models/auction.model.js";
 import BidPayment from "../models/bidPayment.model.js";
 import User from "../models/user.model.js";
@@ -295,17 +296,7 @@ async function handleListingExtrasSuccess(paymentIntent) {
         const auction = await Auction.findById(auctionId);
         if (!auction) return;
 
-        auction.extrasPayment.status = 'completed';
-        auction.extrasPayment.paidAt = new Date();
-
-        if (
-            (auction.auctionType === 'buy_now' || auction.auctionType === 'giveaway') &&
-            auction.status === 'draft'
-        ) {
-            auction.status = 'active';
-        }
-
-        await auction.save();
+        await onExtrasPaid(auction);
         console.log(`✅ Listing extras paid for auction ${auctionId}`);
     } catch (err) {
         console.error('handleListingExtrasSuccess error:', err);
@@ -1059,17 +1050,8 @@ export const confirmListingExtrasPayment = async (req, res) => {
         }
 
         // ─── 1. Mark extras paid (idempotent — safe if webhook beat us) ───
-        if (auction.extrasPayment.status !== "completed") {
-            auction.extrasPayment.status = "completed";
-            auction.extrasPayment.paidAt = new Date();
-            if (
-                (auction.auctionType === "buy_now" ||
-                    auction.auctionType === "giveaway") &&
-                auction.status === "draft"
-            ) {
-                auction.status = "active";
-            }
-            await auction.save();
+        if (auction.extrasPayment.status !== "completed" || auction.status === "awaiting_payment") {
+            await onExtrasPaid(auction);
         }
 
         // ─── 2. Save the card to the seller's account (independent of #1) ───

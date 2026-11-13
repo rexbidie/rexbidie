@@ -419,6 +419,9 @@ const auctionSchema = new Schema(
         "sold",
         "reserve_not_met",
         "sold_buy_now",
+        // Featured / Meta Boost chosen but not paid yet: not submitted for
+        // approval and can't go live (services/listingExtrasService.js).
+        "awaiting_payment",
       ], // ADDED 'sold_buy_now'
       default: "draft",
     },

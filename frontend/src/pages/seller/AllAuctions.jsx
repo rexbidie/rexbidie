@@ -79,6 +79,19 @@ function AllAuctions() {
         }
     };
 
+    // Unpaid Featured / Meta Boost: drop them and submit the listing without them.
+    const handleSubmitWithoutExtras = async (auction) => {
+        setActiveDropdown(null);
+        if (!window.confirm("Submit this listing without Featured / Meta Boost? You won't be charged for them.")) return;
+        try {
+            const { data } = await axiosInstance.post(`/api/v1/auctions/${auction._id}/submit-without-extras`);
+            alert(data.message);
+            fetchAuctions();
+        } catch (err) {
+            alert(err.response?.data?.message || "Could not submit the listing");
+        }
+    };
+
     useEffect(() => {
         const fetchCategoriesForFilter = async () => {
             try {
@@ -201,7 +214,7 @@ function AllAuctions() {
                     matchesStatus = !hasStarted;
                     break;
                 case "pending":
-                    matchesStatus = auction.status === 'draft' || auction.status === 'pending';
+                    matchesStatus = auction.status === 'draft' || auction.status === 'pending' || auction.status === 'awaiting_payment';
                     break;
                 default:
                     matchesStatus = true;
@@ -232,6 +245,9 @@ function AllAuctions() {
         const end = new Date(auction.endDate);
         const diffHours = (end - now) / (1000 * 60 * 60);
 
+        if (auction.status === 'awaiting_payment') {
+            return { class: "bg-orange-100 text-orange-800", text: "Awaiting payment" };
+        }
         if (diffHours < 24 && diffHours > 0) {
             return { class: "bg-amber-100 text-amber-800", text: "Ending Soon" };
         } else if (diffHours <= 0) {
@@ -473,7 +489,7 @@ function AllAuctions() {
                                                                 )}
                                                                 {auction.extrasPayment?.status === "pending" && auction.extrasPayment?.amount > 0 && (
                                                                     <span className="md:ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full inline-flex items-center">
-                                                                        Payment Pending
+                                                                        Not submitted: payment needed
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -523,6 +539,14 @@ function AllAuctions() {
                                                                                 </button>
                                                                             )}
 
+                                                                        {auction.status === "awaiting_payment" && auction.extrasPayment?.status !== "completed" && (
+                                                                            <button
+                                                                                onClick={() => handleSubmitWithoutExtras(auction)}
+                                                                                className="px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                                                                            >
+                                                                                Submit without extras
+                                                                            </button>
+                                                                        )}
                                                                         <Link
                                                                             to={`/auction/${auction._id}`}
                                                                             target="_blank"

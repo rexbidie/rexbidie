@@ -33,6 +33,7 @@ import { minimumPriceError } from "../utils/listingRules.js";
 import { calculateListingExtras } from "../utils/listingExtras.js";
 import { livePriceError, liveBuyNowState } from "../utils/liveBuyNow.js";
 import { buyLive } from "../services/liveBuyNowService.js";
+import { submitWithoutExtras } from "../services/listingExtrasService.js";
 import { getExtrasPricingMenu } from "../utils/listingExtras.js";
 
 // Initialize Stripe with your secret key
@@ -507,8 +508,9 @@ export const createAuction = async (req, res) => {
 
     // If extras are required on an always-available auction, defer activation
     // until payment lands. (Timed auctions start as draft anyway.)
-    if (extras.total > 0 && (auctionType === 'buy_now' || auctionType === 'giveaway')) {
-      auctionData.status = 'draft';
+    // Listings with paid extras aren't submitted until they're paid.
+    if (extras.total > 0) {
+      auctionData.status = 'awaiting_payment';
     }
 
     const auction = await Auction.create(auctionData);
@@ -571,8 +573,8 @@ export const createAuction = async (req, res) => {
       return res.status(201).json({
         success: true,
         message: paymentIntent
-          ? 'Auction created — please complete payment for paid extras'
-          : 'Auction saved. Payment for the paid extras could not be started, please pay from All Auctions in your dashboard.',
+          ? 'Listing saved. Pay for the extras to submit it for approval.'
+          : 'Listing saved but not submitted. Payment for the extras could not be started, please pay from All Auctions in your dashboard.',
         data: {
           auction,
           payment: paymentIntent
@@ -1294,10 +1296,11 @@ export const updateAuction = async (req, res) => {
     }
 
     // CHECK: If auction is sold, prevent seller from editing
+    // 403, not 401: the website treats 401 as "logged out" and signs the user out.
     if (auction.status === "sold" || auction.status === "sold_buy_now") {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
-        message: `Sold auction can be edited by administrator only.`,
+        message: `Sold listings can only be edited by RexBid. Please contact us if something needs changing.`,
       });
     }
 
@@ -1953,7 +1956,8 @@ export const updateAuction = async (req, res) => {
     }
 
     // ========== STATUS DETERMINATION ==========
-    let newStatus = "draft";
+    // Unpaid extras: the listing stays unsubmitted until they're paid.
+    let newStatus = auction.status === "awaiting_payment" ? "awaiting_payment" : "draft";
 
     // ========== PREPARE UPDATE DATA ==========
     const updateData = {
@@ -4520,5 +4524,31 @@ export const liveBuyNowStatus = async (req, res) => {
   } catch (error) {
     console.error("Live Buy It Now status error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * @desc    Drop unpaid Featured / Meta Boost extras and submit the listing without them
+ * @route   POST /api/v1/auctions/:id/submit-without-extras
+ * @access  Private (seller)
+ */
+export const submitListingWithoutExtras = async (req, res) => {
+  try {
+    const auction = await Auction.findById(req.params.id);
+    if (!auction) return res.status(404).json({ success: false, message: "Listing not found" });
+    if (auction.seller.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+    await submitWithoutExtras(auction);
+    res.json({
+      success: true,
+      message: auction.status === "draft"
+        ? "Submitted for approval without the extras. We'll check it within 12 hours."
+        : "Your listing is live without the extras.",
+      data: { auction },
+    });
+  } catch (error) {
+    if (!error?.status) console.error("Submit without extras error:", error);
+    res.status(error?.status || 500).json({ success: false, message: error?.status ? error.message : "Internal server error" });
   }
 };
