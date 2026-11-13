@@ -1,38 +1,17 @@
-// Paid listing extras. Prices are defined in EUR; sterling prices are
-// derived LIVE from the cached exchange rates and rounded to the nearest £1.
+// Paid listing extras. Prices are fixed in both currencies: sterling is
+// set at £8 = €10 (not a live exchange rate), so £24 Featured and
+// £8 / £16 / £32 Meta Boost, matching frontend/src/utils/fees.js.
 // No VAT — RexBid is not VAT registered.
-
-import { getCachedRates } from "../routes/currency.route.js";
 
 export const FEATURED_FEE_EUR = 30;
 export const META_BOOST_PRICES_EUR = { boost: 10, plus: 20, max: 40 };
+export const GBP_PER_EUR_EXTRAS = 0.8;
 
-// Fail-safe only — used if rates are momentarily unavailable (cold start).
-const FALLBACK_EUR_TO_GBP = 0.8;
+/** Price of an extra in the seller's currency (EUR or fixed GBP). */
+const toSellerCurrency = (amountEur, currency = "EUR") =>
+    currency === "GBP" ? Math.round(amountEur * GBP_PER_EUR_EXTRAS) : amountEur;
 
 const roundToWholeUnit = (amount) => Math.round(amount);
-
-/**
- * Convert an EUR price to the target currency using live cached rates.
- * Rounded to the nearest whole unit (£1 / €1).
- */
-const toSellerCurrency = (amountEur, currency = "EUR") => {
-    if (currency === "EUR") return amountEur;
-
-    const rates = getCachedRates();
-    const rate = rates?.EUR?.rates?.[currency];
-
-    if (!rate || typeof rate !== "number") {
-        // Rates not ready — fall back to old business rate to avoid
-        // charging an unbounded or zero amount.
-        console.warn(
-            `[listingExtras] FX rate EUR→${currency} unavailable; using fallback ${FALLBACK_EUR_TO_GBP}`
-        );
-        return roundToWholeUnit(amountEur * FALLBACK_EUR_TO_GBP);
-    }
-
-    return roundToWholeUnit(amountEur * rate);
-};
 
 export const calculateListingExtras = ({
     featuredRequested,

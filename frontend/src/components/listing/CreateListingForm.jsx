@@ -491,8 +491,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
     }, []);
 
     // Fetch current paid-extras pricing for the seller's currency.
-    // The backend is the single source of truth — GBP prices are derived live
-    // from exchange rates and rounded to the nearest £1.
+    // The backend is the single source of truth for prices (fixed in € and £).
     useEffect(() => {
         if (!user?.currency) return;
         let cancelled = false;
