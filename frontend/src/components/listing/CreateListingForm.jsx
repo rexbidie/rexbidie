@@ -44,6 +44,7 @@ import { validateMinStart, validateMinReserve, minimumsHint, suggestedIncrement 
 import { FEATURED_FEE_EUR, SELLER_FEES_FREE_UNTIL, META_BOOST_PACKAGES, META_BOOST_MIN_HOURS_BEFORE_CLOSE, extraPriceLabel } from '../../utils/fees';
 import { HowSellingWorks, Hint, Note } from './ListingGuidance';
 import ListingExtrasPaymentModal from "./ListingExtrasPaymentModal";
+import { minLivePrice, CLOSE_CUTOFF_HOURS } from '../../utils/liveBuyNow';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -742,7 +743,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             }
 
             if (auctionType === 'reserve') {
-                fieldsToValidate.push('reservePrice');
+                fieldsToValidate.push('reservePrice', 'liveBuyNowPrice');
             }
 
             if (auctionType === 'buy_now') {
@@ -911,6 +912,10 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
 
                 if (auctionData.auctionType === 'reserve' && auctionData.reservePrice) {
                     formData.append('reservePrice', auctionData.reservePrice);
+                }
+
+                if (auctionData.auctionType === 'reserve' && auctionData.liveBuyNowPrice) {
+                    formData.append('liveBuyNowPrice', auctionData.liveBuyNowPrice);
                 }
             }
 
@@ -1493,6 +1498,40 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     </div>
                                                 )}
 
+                                                {watch('auctionType') === 'reserve' && (
+                                                    <div className="mb-6">
+                                                        <label htmlFor="liveBuyNowPrice" className="block text-sm font-medium text-secondary mb-1">Buy It Now price (optional)</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600">{currencySymbol}</span>
+                                                            <input
+                                                                {...register('liveBuyNowPrice', {
+                                                                    validate: (value) => {
+                                                                        if (value === '' || value === undefined || value === null) return true;
+                                                                        const price = parseFloat(value);
+                                                                        if (!(price > 0)) return 'Enter a valid price, or leave it empty';
+                                                                        const reserve = parseFloat(watch('reservePrice') || 0);
+                                                                        if (!(reserve > 0)) return 'Set the reserve price first';
+                                                                        const min = minLivePrice(reserve);
+                                                                        return price >= min || `Must be at least 15% above the reserve (${currencySymbol}${min.toLocaleString('en-IE')} or more)`;
+                                                                    },
+                                                                })}
+                                                                id="liveBuyNowPrice"
+                                                                type="number"
+                                                                step="1"
+                                                                min="0"
+                                                                className="w-full pl-8 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                                                                placeholder="Leave empty for no Buy It Now"
+                                                            />
+                                                        </div>
+                                                        {errors.liveBuyNowPrice && <p className="text-red-500 text-sm mt-1">{errors.liveBuyNowPrice.message}</p>}
+                                                        <Hint>
+                                                            Lets a buyer buy your machine outright while the auction is live. It must be at least 15% above your reserve.
+                                                            It closes once bidding reaches 90% of your reserve, or {CLOSE_CUTOFF_HOURS} hours before the auction ends, so it never cuts strong bidding short.
+                                                            It can't be added or raised once bidding starts.
+                                                        </Hint>
+                                                    </div>
+                                                )}
+
                                                 {watch('auctionType') === 'buy_now' && (
                                                     <div className="mb-4">
                                                         <label htmlFor="buyNowPrice" className="block text-sm font-medium text-secondary mb-1">
@@ -1743,6 +1782,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                     ['Sale type', auctionType === 'reserve' ? 'Reserve' : 'No reserve'],
                                                     ['Starting bid', watch('startPrice') ? `${currencySymbol}${Number(watch('startPrice')).toLocaleString('en-IE')}` : '-'],
                                                     ...(auctionType === 'reserve' ? [['Reserve', watch('reservePrice') ? `${currencySymbol}${Number(watch('reservePrice')).toLocaleString('en-IE')}` : '-']] : []),
+                                                    ...(auctionType === 'reserve' && watch('liveBuyNowPrice') ? [['Buy It Now (during auction)', `${currencySymbol}${Number(watch('liveBuyNowPrice')).toLocaleString('en-IE')}`]] : []),
                                                     ['Bid increment', watch('bidIncrement') ? `${currencySymbol}${Number(watch('bidIncrement')).toLocaleString('en-IE')}` : '-'],
                                                     ['VAT', watch('vatIncluded') ? 'Added on top of the winning bid' : 'Not applicable'],
                                                     ['Featured', watch('featuredRequested') ? `Yes (${formatExtrasPrice('featured')})` : 'No'],

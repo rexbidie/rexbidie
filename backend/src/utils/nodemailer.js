@@ -1269,6 +1269,30 @@ const outbidNotificationEmail = async (
     }
 };
 
+/** Tells a bidder that a lot they bid on was bought outright on Buy It Now during the auction. */
+const liveBuyNowBidderEmail = async (userEmail, userName, listing) => {
+    if (!(await canSendEmail(userEmail, "outbid"))) return false;
+    const content = `
+            <h2 style="text-align: center;">This Lot Has Been Bought</h2>
+            <div style="background: ${BRAND_COLORS.grayBg}; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${BRAND_COLORS.secondary};">
+                <p style="margin: 0; font-size: 18px; font-weight: bold; color: ${BRAND_COLORS.secondary};">${listing.title}</p>
+            </div>
+            <p>Dear ${userName || "there"},</p>
+            <p>Thanks for bidding on <strong>${listing.title}</strong>. Another buyer has bought it outright at the seller's Buy It Now price, so the auction has now closed.</p>
+            <p>Your bids on this lot have ended and nothing is owed. Any automatic bid you set on it has been cancelled.</p>
+            <div style="text-align: center; margin: 25px 0;">
+                ${createButton('Browse Other Listings', `${FRONTEND_URL}/auctions`, 'primary')}
+            </div>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: userEmail,
+        subject: `Bought on Buy It Now - ${listing.title}`,
+        html: baseTemplate(content, 'Lot Bought'),
+    });
+    return !!info;
+};
+
 // ─────────────────────────────────────────────
 // Outbid batching — accumulate candidates, flush after quiet period
 // ─────────────────────────────────────────────
@@ -4413,6 +4437,7 @@ const sendBinInviteEmail = async (to, rendered) => {
 };
 
 export {
+    liveBuyNowBidderEmail,
     renderBinInviteEmail,
     sendBinInviteEmail,
     postAuctionBinBuyerEmail,

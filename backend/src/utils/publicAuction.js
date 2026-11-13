@@ -12,6 +12,7 @@
 
 import { publicName } from "./displayName.js";
 import { contactModeFor } from "./contactPolicy.js";
+import { liveBuyNowState } from "./liveBuyNow.js";
 
 const idOf = (v) => (v && typeof v === "object" ? v._id ?? v.id : v)?.toString?.();
 
@@ -91,6 +92,21 @@ export const sanitizeAuctionForViewer = (auction, viewer = null) => {
   const isWinner = !!viewerId && idOf(a.winner) === viewerId;
 
   const summary = reserveSummary(a);
+
+  // Buy It Now during the auction: worked out before the reserve is removed.
+  // The public sees the price, whether it's open and why not; never the buyer.
+  const live = liveBuyNowState(a);
+  if (live.offered) {
+    summary.liveBuyNow = {
+      price: live.price,
+      convertedPrice: a.convertedLiveBuyNowPrice ?? null,
+      available: live.available,
+      reason: live.reason,
+      closesAt: live.closesAt,
+    };
+  } else {
+    summary.liveBuyNow = undefined;
+  }
   const offers = Array.isArray(a.offers) ? a.offers : [];
   const participants = Array.isArray(a.participants) ? a.participants : [];
   const counts = {

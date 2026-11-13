@@ -185,6 +185,14 @@ const auctionSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    // Buy It Now while a reserve auction is live (utils/liveBuyNow.js).
+    // Price is in the lot's own currency. processing: a purchase is going through.
+    liveBuyNow: {
+      price: { type: Number, min: 0 },
+      status: { type: String, enum: [null, "processing", "sold"], default: null },
+      soldTo: { type: Schema.Types.ObjectId, ref: "User" },
+      soldAt: Date,
+    },
     // Buy It Now after the auction (utils/postAuctionBin.js). Used when a reserve
     // lot ends without meeting its reserve. Price is in the lot's own currency.
     postAuctionBin: {
@@ -640,6 +648,18 @@ auctionSchema.methods.placeBid = async function (
     throw new Error(`Bid must be at least $${minBid}`);
   }
 
+  if (this.liveBuyNow?.status === "processing") {
+    throw new Error("This lot is being bought on Buy It Now. Please refresh the page.");
+  }
+
+  // Only save the bid if the lot hasn't changed since it was loaded (another
+  // bid, or a Buy It Now purchase going through at the same moment).
+  this.$where = {
+    status: this.isModified("status") ? "draft" : this.status,
+    currentPrice: this.currentPrice,
+    "liveBuyNow.status": { $ne: "processing" },
+  };
+
   // Add bid
   this.bids.push({
     bidder: bidderId,
@@ -667,7 +687,16 @@ auctionSchema.methods.placeBid = async function (
     }
   }
 
-  return this.save();
+  try {
+    return await this.save();
+  } catch (err) {
+    if (err?.name === "DocumentNotFoundError" || err?.name === "VersionError") {
+      throw new Error("This lot has just changed. Please refresh the page and try again.");
+    }
+    throw err;
+  } finally {
+    this.$where = undefined;
+  }
 };
 
 auctionSchema.methods.buyNow = async function (buyerId, buyerUsername) {

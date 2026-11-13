@@ -31,6 +31,8 @@ import { processProxyBids } from "../services/proxyBidService.js";
 import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
 import { minimumPriceError } from "../utils/listingRules.js";
 import { calculateListingExtras } from "../utils/listingExtras.js";
+import { livePriceError, liveBuyNowState } from "../utils/liveBuyNow.js";
+import { buyLive } from "../services/liveBuyNowService.js";
 import { getExtrasPricingMenu } from "../utils/listingExtras.js";
 
 // Initialize Stripe with your secret key
@@ -486,6 +488,14 @@ export const createAuction = async (req, res) => {
       parseFloat(bidIncrement) > 0
     ) {
       auctionData.bidIncrement = parseFloat(bidIncrement);
+    }
+
+    // ── Buy It Now during the auction (reserve lots only) ──
+    const liveBinPrice = parseFloat(req.body.liveBuyNowPrice) || 0;
+    if (liveBinPrice > 0) {
+      const liveBinErr = livePriceError({ auctionType, reservePrice: auctionData.reservePrice, price: liveBinPrice });
+      if (liveBinErr) return res.status(400).json({ success: false, message: liveBinErr });
+      auctionData.liveBuyNow = { price: liveBinPrice };
     }
 
     // ── Compute paid extras before creating the auction ──
@@ -1107,6 +1117,7 @@ export const getAuction = async (req, res) => {
     const convertedBuyNowPrice = convertPrice(auction, userCurrency, 'buyNowPrice');
     const convertedReservePrice = convertPrice(auction, userCurrency, 'reservePrice');
     const convertedFinalPrice = convertPrice(auction, userCurrency, 'finalPrice');
+    const convertedLiveBuyNowPrice = convert(auction.liveBuyNow?.price);
 
     // Convert offers array
     const convertedOffers = auction.offers.map(offer => {
@@ -1152,6 +1163,7 @@ export const getAuction = async (req, res) => {
           convertedBuyNowPrice,
           convertedReservePrice,
           convertedFinalPrice,
+          convertedLiveBuyNowPrice,
           displayCurrency: userCurrency,
           ...getManualPaymentFlags(auction),
         }, req.user)
@@ -2024,6 +2036,24 @@ export const updateAuction = async (req, res) => {
       updateData.bidPaymentRequired = true;
     }
 
+    // Buy It Now during the auction (reserve lots only; can't be added or
+    // raised once there are bids).
+    if (auctionType !== "reserve") {
+      updateData["liveBuyNow.price"] = null;
+    } else if (req.body.liveBuyNowPrice !== undefined) {
+      const liveBinPrice = parseFloat(req.body.liveBuyNowPrice) || 0;
+      const liveBinErr = livePriceError({
+        auctionType,
+        reservePrice,
+        price: liveBinPrice,
+        previous: auction.liveBuyNow?.price,
+        bidCount: isEndedAuction ? 0 : auction.bidCount,
+      });
+      if (liveBinErr) return res.status(400).json({ success: false, message: liveBinErr });
+      updateData["liveBuyNow.price"] = liveBinPrice > 0 ? liveBinPrice : null;
+    }
+    if (isEndedAuction) updateData["liveBuyNow.status"] = null;
+
     const updatedAuction = await Auction.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
@@ -2414,6 +2444,7 @@ export const placeBidDirect = async (
         status: "active",
         currentPrice: auction.currentPrice,
         currentBidder: auction.currentBidder || null,
+        "liveBuyNow.status": { $ne: "processing" }, // a Buy It Now purchase is going through
       };
 
       const updatedAuction = await Auction.findOneAndUpdate(query, update, {
@@ -4436,5 +4467,58 @@ export const retryExtrasPayment = async (req, res) => {
   } catch (error) {
     console.error("Retry extras payment error:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+/**
+ * @desc    Buy a reserve lot outright while its auction is live
+ * @route   POST /api/v1/auctions/:id/live-buy-now
+ * @access  Private (anyone allowed to bid)
+ */
+export const buyLiveBuyNow = async (req, res) => {
+  try {
+    const buyer = req.user;
+    if (!buyer?.isActive) return res.status(400).json({ success: false, message: "Your account is inactive." });
+    if (!buyer?.isVerified) {
+      return res.status(400).json({ success: false, message: "Please wait until your account has been verified before buying." });
+    }
+    if (!buyer?.stripeCustomerId || !buyer?.paymentMethodId || !buyer?.isPaymentVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please add a valid payment method before buying.",
+        redirectTo: `/${buyer?.userType || "bidder"}/billing`,
+        errorCode: "PAYMENT_METHOD_REQUIRED",
+      });
+    }
+    if (req.body?.agreed !== true) {
+      return res.status(400).json({ success: false, message: "Please confirm you agree to buy at this price." });
+    }
+    const expected = req.body?.expectedPriceInBase != null ? Number(req.body.expectedPriceInBase) : null;
+    await buyLive(req.params.id, buyer, expected);
+    res.json({ success: true, message: "Congratulations, it's yours! We've emailed you the next steps for payment and collection." });
+  } catch (error) {
+    if (!error?.status) console.error("Live Buy It Now error:", error);
+    res.status(error?.status || 500).json({
+      success: false,
+      message: error?.status ? error.message : "Could not complete the purchase. Please try again.",
+    });
+  }
+};
+
+/**
+ * @desc    Whether Buy It Now is open on a live reserve lot
+ * @route   GET /api/v1/auctions/:id/live-buy-now
+ * @access  Public
+ */
+export const liveBuyNowStatus = async (req, res) => {
+  try {
+    const lot = await Auction.findById(req.params.id)
+      .select("auctionType status winner endDate bidCount currentPrice reservePrice liveBuyNow baseCurrency")
+      .lean();
+    if (!lot) return res.status(404).json({ success: false, message: "Listing not found" });
+    const { offered, available, reason, price, closesAt } = liveBuyNowState(lot);
+    res.json({ success: true, data: { offered, available, reason, price: offered ? price : null, closesAt: closesAt || null, currency: lot.baseCurrency || "EUR" } });
+  } catch (error) {
+    console.error("Live Buy It Now status error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

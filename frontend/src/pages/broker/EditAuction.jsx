@@ -31,6 +31,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../utils/axiosInstance';
 import { validateMinStart, validateMinReserve, minimumsHint } from '../../utils/listingRules';
+import { minLivePrice, CLOSE_CUTOFF_HOURS } from '../../utils/liveBuyNow';
 
 // Drag and Drop item types
 const ItemTypes = {
@@ -727,6 +728,7 @@ const EditAuction = () => {
                         bidIncrement: auction.bidIncrement,
                         auctionType: auction.auctionType,
                         reservePrice: auction.reservePrice,
+                        liveBuyNowPrice: auction.liveBuyNow?.price || '',
                         buyNowPrice: auction.buyNowPrice,
                         allowOffers: auction.allowOffers
                     };
@@ -848,7 +850,7 @@ const EditAuction = () => {
             }
 
             if (auctionType === 'reserve') {
-                fieldsToValidate.push('reservePrice');
+                fieldsToValidate.push('reservePrice', 'liveBuyNowPrice');
             }
 
             if (auctionType === 'buy_now') {
@@ -1137,6 +1139,11 @@ const EditAuction = () => {
                 // Reserve price for reserve auctions
                 if (formData.auctionType === 'reserve' && formData.reservePrice) {
                     formDataToSend.append('reservePrice', formData.reservePrice);
+                }
+
+                // Buy It Now during the auction (empty removes it)
+                if (formData.auctionType === 'reserve') {
+                    formDataToSend.append('liveBuyNowPrice', formData.liveBuyNowPrice || '');
                 }
             }
 
@@ -1807,6 +1814,36 @@ const EditAuction = () => {
                                                         </div>
                                                         {errors.reservePrice && <p className="text-red-500 text-sm mt-1">{errors.reservePrice.message}</p>}
                                                         <p className="text-sm text-secondary mt-1">Item will not sell if bids don't reach this price</p>
+                                                    </div>
+                                                )}
+
+                                                {watch('auctionType') === 'reserve' && (
+                                                    <div className="mb-6">
+                                                        <label htmlFor="liveBuyNowPrice" className="block text-sm font-medium text-secondary mb-1">Buy It Now price (optional)</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-600">{user?.currency === 'GBP' ? '£' : '€'}</span>
+                                                            <input
+                                                                {...register('liveBuyNowPrice', {
+                                                                    validate: (value) => {
+                                                                        if (value === '' || value === undefined || value === null) return true;
+                                                                        const price = parseFloat(value);
+                                                                        if (!(price > 0)) return 'Enter a valid price, or leave it empty';
+                                                                        const min = minLivePrice(watch('reservePrice'));
+                                                                        return price >= min || `Must be at least 15% above the reserve (${min.toLocaleString('en-IE')} or more)`;
+                                                                    },
+                                                                })}
+                                                                id="liveBuyNowPrice"
+                                                                type="number"
+                                                                step="1"
+                                                                min="0"
+                                                                className="w-full pl-8 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                                                                placeholder="Leave empty for no Buy It Now"
+                                                            />
+                                                        </div>
+                                                        {errors.liveBuyNowPrice && <p className="text-red-500 text-sm mt-1">{errors.liveBuyNowPrice.message}</p>}
+                                                        <p className="text-sm text-secondary mt-1">
+                                                            Lets a buyer buy outright while the auction is live. At least 15% above the reserve. Closes once bidding reaches 90% of the reserve or {CLOSE_CUTOFF_HOURS} hours before the end. Can't be added or raised once bidding starts.
+                                                        </p>
                                                     </div>
                                                 )}
 
