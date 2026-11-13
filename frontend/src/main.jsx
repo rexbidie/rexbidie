@@ -8,6 +8,26 @@ import { PopUpContextProvider } from './contexts/PopUpContextProvider';
 import { Protected, LoadingSpinner, AdminRoute } from './components';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 
+// After a new version is deployed, a page that was already open still asks
+// for the old page files, which no longer exist, and the page goes blank.
+// Reload once to pick up the new version (at most once a minute, so a real
+// outage can't cause a reload loop).
+const reloadForNewVersion = (event) => {
+    let last = 0;
+    try { last = Number(sessionStorage.getItem('rexbid-version-reload')) || 0; } catch { /* storage blocked */ }
+    if (Date.now() - last < 60_000) return;
+    try { sessionStorage.setItem('rexbid-version-reload', String(Date.now())); } catch { /* storage blocked */ }
+    event?.preventDefault?.();
+    window.location.reload();
+};
+window.addEventListener('vite:preloadError', reloadForNewVersion);
+window.addEventListener('unhandledrejection', (event) => {
+    const msg = String(event.reason?.message || event.reason || '');
+    if (/dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(msg)) {
+        reloadForNewVersion(event);
+    }
+});
+
 const Home = lazy(() => import('./pages/Home'));
 const Contact = lazy(() => import('./pages/Contact'));
 const About = lazy(() => import('./pages/About'));
