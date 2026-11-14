@@ -255,6 +255,15 @@ const auctionSchema = new Schema(
         },
       ],
     },
+    // Seller accepted the top bid after the reserve wasn't met (utils/acceptTopBid.js).
+    acceptedTopBid: {
+      status: { type: String, enum: [null, "processing", "accepted"], default: null },
+      amount: Number,
+      bidder: { type: Schema.Types.ObjectId, ref: "User" },
+      acceptedAt: Date,
+      // Last Chance was live when the seller accepted (it was cancelled).
+      binWasLive: Boolean,
+    },
     vatIncluded: {
       type: Boolean,
       default: false,

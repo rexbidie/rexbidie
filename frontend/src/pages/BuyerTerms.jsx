@@ -61,6 +61,11 @@ const BuyerTerms = () => {
                                     highest bidder and the reserve price is met.
                                 </li>
                                 <li>
+                                    If the reserve is not met, the seller may still accept your highest bid within
+                                    24 hours of the auction ending. If they do, you have bought the item at that
+                                    bid, exactly as if you had won the auction.
+                                </li>
+                                <li>
                                     You must not pay the seller directly or attempt to complete the transaction
                                     outside RexBid.
                                 </li>
