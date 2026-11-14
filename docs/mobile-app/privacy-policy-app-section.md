@@ -1,6 +1,6 @@
-# Privacy policy: additions for the app (DRAFT, for approval)
+# Privacy policy: additions for the app
 
-**Status:** draft. Not live on the website. Please read it and, if you're happy (ideally after a
+**Status:** approved and live on /privacy-policy (November 2026).
 quick check by your solicitor), say so and it will be added to `/privacy-policy`.
 Apple and Google check that the privacy policy covers the app before approving it.
 
