@@ -1,11 +1,10 @@
 # Privacy policy: additions for the app
 
-**Status:** approved and live on /privacy-policy (November 2026).
-quick check by your solicitor), say so and it will be added to `/privacy-policy`.
-Apple and Google check that the privacy policy covers the app before approving it.
+**Status:** approved and added to `/privacy-policy` (November 2026). Apple and Google check
+that the privacy policy covers the app before approving it.
 
-Suggested placement: a new section **"Our mobile app"** after section 6 (Cookies), plus the small
-changes to sections 8 and 9 shown at the end.
+Placement on the site: a new section **"Our Mobile App"** after section 6, plus the additions to
+the Marketing part and sections 8 and 9 shown at the end.
 
 ---
 
