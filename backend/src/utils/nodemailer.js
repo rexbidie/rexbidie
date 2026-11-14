@@ -82,7 +82,9 @@ const BRAND_NAME = 'RexBid';
 const BRAND_TAGLINE = 'Ireland\'s Marketplace for Machinery & Commercials';
 
 // Contact/Support info
-const SUPPORT_EMAIL = process.env.EMAIL_USER;
+// Contact address shown to customers in emails (footer, "contact us" links).
+// Separate from EMAIL_USER, the Google account the site sends from.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "info@rexbid.ie";
 const SUPPORT_PHONE = '';
 const COMPANY_LOCATION = 'Ireland';
 const DELIVERY_PARTNER_EMAILS = (process.env.DELIVERY_PARTNER_EMAILS || "seamus@evolveauto.ie")
@@ -536,40 +538,55 @@ const contactConfirmationEmail = async (name, email) => {
     }
 };
 
+// People new users can ring for help (also on the website: Sell page, footer, policy).
+const HELP_CONTACTS = [
+    { name: "Darren", phone: "+353 87 203 9257" },
+    { name: "Shane", phone: "+353 85 762 8834" },
+];
+const helpContactsBlock = (heading = "Questions? Give us a call") => `
+    <div style="background: ${BRAND_COLORS.grayBg}; border: 1px solid ${BRAND_COLORS.grayBorder}; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+        <p style="margin: 0 0 6px 0; font-size: 17px; font-weight: bold; color: ${BRAND_COLORS.secondary};">${heading}</p>
+        <p style="margin: 0 0 14px 0;">If you have any questions about how RexBid works, how to bid or how to sell, give us a call. We're happy to help.</p>
+        ${HELP_CONTACTS.map((c) => `
+            <p style="margin: 6px 0; font-size: 16px;">
+                <strong>${c.name}</strong>&nbsp;
+                <a href="tel:${c.phone.replace(/\s+/g, "")}" style="color: ${BRAND_COLORS.primary}; font-weight: bold; text-decoration: none;">${c.phone}</a>
+            </p>`).join("")}
+    </div>
+`;
+
 // 3. Welcome email for user
+// One short email for everyone: most people both buy and sell.
 const welcomeEmail = async (user) => {
     try {
+        const name = escapeHtml(user.firstName || user.companyName || user.username || "there");
+        const type = user.userType || "bidder";
+        const link = (path, text) => `<a href="${FRONTEND_URL}${path}" style="color: ${BRAND_COLORS.primary};">${text}</a>`;
+
         const content = `
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="text-align: center;">Welcome to ${BRAND_NAME}, ${user.firstName || user.companyName || user.username}!</h2>
-            </div>
-            
-            <p>We're thrilled to welcome you to ${BRAND_NAME}. Your ${user.userType || 'bidder'} account has been successfully created.</p>
-            
-            ${createInfoCard(`
-                <p style="margin: 0 0 12px 0;"><strong>Account Details</strong></p>
-                ${createSummaryRow('Name:', `${user.firstName || ''} ${user.lastName || ''}`)}
-                ${createSummaryRow('Email:', user.email)}
-                ${createSummaryRow('Account Type:', user.userType || 'Bidder')}
-            `)}
-            
+            <h2 style="text-align: center;">Welcome to ${BRAND_NAME}, ${name}!</h2>
+
+            <p>Thanks for joining Ireland's online auction for tractors, plant and farm machinery. You can buy and sell with the same account.</p>
+
+            <ul style="padding-left: 20px; margin: 16px 0;">
+                <li style="margin-bottom: 8px;"><strong>To buy:</strong> ${link(`/${type}/billing`, "add a card")} to your account, then bid on any ${link("/auctions", "listing")}.</li>
+                <li style="margin-bottom: 8px;"><strong>To sell:</strong> ${link("/sell", "list your machine")} and set a private reserve. It only takes a few minutes.</li>
+                <li><strong>Questions about a machine?</strong> Ask the seller on the listing.</li>
+            </ul>
+
             <div style="text-align: center; margin: 25px 0;">
-                ${createButton('Go to Profile', `${FRONTEND_URL}/${user?.userType || 'bidder'}/profile`, 'primary')}
+                ${createButton("Browse listings", `${FRONTEND_URL}/auctions`, "primary")}
             </div>
-            
-            <div style="text-align: center; margin: 15px 0;">
-                ${createButton('Browse Auctions', `${FRONTEND_URL}/auctions`, 'outline')}
-            </div>
-            
-            <p>Need help getting started? Check out our FAQ section or contact our support team - we're here to help!</p>
+
+            ${helpContactsBlock()}
         `;
 
-        const html = baseTemplate(content, `Welcome, ${user.firstName || user.companyName || user.username}`);
+        const html = baseTemplate(content, `Welcome to ${BRAND_NAME}`);
 
         const info = await transporter.sendMail({
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: user.email,
-            subject: `Welcome to ${BRAND_NAME}, ${user.firstName || user.companyName || user.username}!`,
+            subject: `Welcome to ${BRAND_NAME}${user.firstName || user.companyName ? `, ${user.firstName || user.companyName}` : ""}!`,
             html
         });
 
