@@ -91,7 +91,7 @@ const processingPurposes = [
 ];
 
 const PrivacyPolicy = () => {
-    const formattedDate = "August 2026";
+    const formattedDate = "November 2026";
 
     return (
         <section className="pt-28 pb-16 bg-white">
@@ -620,6 +620,13 @@ const PrivacyPolicy = () => {
                                 Services or other transactions.
                             </p>
 
+                            <p className="text-gray-700 mb-3">
+                                You can choose which emails you receive in Profile &rarr; Notifications.
+                                Emails about payments, auctions you&rsquo;ve won, accepted offers, your sales
+                                and your account&rsquo;s security are always sent, because they are part of
+                                the service.
+                            </p>
+
                             {/* Cookies */}
                             {/* <h3 className="font-semibold text-gray-800 mb-2 mt-6">Cookies</h3>
 
@@ -744,6 +751,66 @@ const PrivacyPolicy = () => {
                             </p>
                         </div>
 
+                        {/* Our mobile app (added November 2026) */}
+                        <div className="border-t pt-6" id="mobile-app">
+                            <h2 className="text-xl font-bold text-gray-900 mb-3">Our Mobile App</h2>
+
+                            <p className="text-gray-700 mb-3">
+                                RexBid has an app for iPhone and Android. It uses the same account and
+                                services as rexbid.ie, and this privacy policy applies to it in the same
+                                way. The app also uses the following.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">Push notifications</h3>
+                            <p className="text-gray-700 mb-3">
+                                If you allow notifications, your phone gives us a notification token (a
+                                random identifier for the app on your phone, provided by Google Firebase
+                                Cloud Messaging and, on iPhone, Apple&rsquo;s push service). We store it with
+                                your account so we can tell you when you&rsquo;re outbid, when lots end, when
+                                you win, about payments, questions and your sales. We delete it when you
+                                sign out or delete your account, or when it stops working. You can choose
+                                which notifications you get in Profile &rarr; Notifications, or turn them all
+                                off in your phone&rsquo;s Settings. Notifications are also kept in the
+                                app&rsquo;s Alerts list for 90 days.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">Face ID, Touch ID and fingerprint sign-in</h3>
+                            <p className="text-gray-700 mb-3">
+                                If you turn this on, your email and password are stored only on your phone,
+                                in its secure storage (the iPhone Keychain or Android Keystore), and unlocked
+                                by your phone&rsquo;s own face or fingerprint check. We never receive your face
+                                or fingerprint data. You can turn this off at any time by signing in with your
+                                password and declining, or by removing the app.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">Camera and photos</h3>
+                            <p className="text-gray-700 mb-3">
+                                The app asks for access to your camera and photos only when you choose to add
+                                photos to a listing. Only the photos you pick are uploaded, as part of your
+                                listing.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">Staying signed in</h3>
+                            <p className="text-gray-700 mb-3">
+                                The app keeps you signed in on that phone (for up to 90 days without use) so
+                                you don&rsquo;t miss notifications. On the website you can choose &ldquo;Keep me
+                                signed in&rdquo;.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">No advertising tracking</h3>
+                            <p className="text-gray-700 mb-3">
+                                The app does not use advertising identifiers, Google Analytics or the Meta
+                                Pixel, and does not track you across other companies&rsquo; apps or websites.
+                            </p>
+
+                            <h3 className="font-semibold text-gray-800 mb-2 mt-4">Service providers for the app</h3>
+                            <p className="text-gray-700">
+                                Google (Firebase Cloud Messaging) and Apple (Apple Push Notification service)
+                                deliver notifications on our behalf. Payments in the app are handled by
+                                Stripe, as on the website.
+                            </p>
+                        </div>
+
                         {/* Section 7 */}
                         <div className="border-t pt-6">
                             <h2 className="text-xl font-bold text-gray-900 mb-3">7. Data Security</h2>
@@ -833,6 +900,15 @@ const PrivacyPolicy = () => {
                             </p>
 
                             <p className="text-gray-700 mb-3">
+                                If you delete your account, we remove your name, contact details, address,
+                                profile photo, saved cards, payout details, identity documents, watchlist,
+                                reminders, notifications and app sign-ins. We keep records of completed
+                                sales, payment requests, receipts, statements and payouts for six years for
+                                tax and accounting purposes. Questions and answers you posted stay on
+                                listings, shown as &ldquo;Deleted user&rdquo;.
+                            </p>
+
+                            <p className="text-gray-700 mb-3">
                                 In some circumstances you can ask us to delete your data: see{" "}
                                 <a href="#your-legal-rights" className="text-blue-600 hover:underline">
                                     YOUR LEGAL RIGHTS
@@ -870,6 +946,16 @@ const PrivacyPolicy = () => {
                                     {email}
                                 </a>
                                 .
+                            </p>
+
+                            <p className="text-gray-700 mb-4">
+                                You can delete your account yourself at any time in Profile &rarr; Security
+                                &rarr; Delete my account, on the website or in the app, or see{" "}
+                                <a href="/delete-account" className="text-blue-600 hover:underline">
+                                    rexbid.ie/delete-account
+                                </a>
+                                . If you have a live listing, a leading bid, an open offer or a sale in
+                                progress, this needs to finish first.
                             </p>
 
                             <h3 className="font-semibold text-gray-800 mb-2 mt-4">
