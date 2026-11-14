@@ -568,7 +568,7 @@ const welcomeEmail = async (user) => {
 
             <ul style="padding-left: 20px; margin: 16px 0;">
                 <li style="margin-bottom: 8px;"><strong>To buy:</strong> ${link(`/${type}/billing`, "add a card")} to your account, then bid on any ${link("/auctions", "listing")}.</li>
-                <li style="margin-bottom: 8px;"><strong>To sell:</strong> ${link("/sell", "list your machine")} and set a private reserve, or WhatsApp Darren the photos and we'll list it for you.</li>
+                <li style="margin-bottom: 8px;"><strong>To sell:</strong> ${link("/sell", "list your machine")} and set a private reserve. It only takes a few minutes.</li>
                 <li><strong>Questions about a machine?</strong> Ask the seller on the listing.</li>
             </ul>
 
