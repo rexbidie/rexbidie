@@ -135,8 +135,18 @@ Website builds (`npm run build`) are unaffected by the app.
    to `production` (or let Xcode's archive do it; check the archived entitlements).
 
 ### Android (Android Studio)
-1. *Build → Generate Signed App Bundle* → create an upload key (keep the `.jks` file and its
-   passwords safe and **off GitHub**; losing it makes updates harder).
+1. Signing: the upload key is `rexbid-upload.jks` (alias `rexbid-upload`), created in Nov 2026 and
+   kept by the owner, **never on GitHub**. To build, create `frontend/android/keystore.properties`:
+   ```
+   storeFile=/full/path/to/rexbid-upload.jks
+   storePassword=...
+   keyAlias=rexbid-upload
+   keyPassword=...
+   ```
+   then run `cd frontend/android && ./gradlew bundleRelease`. The file is
+   `app/build/outputs/bundle/release/app-release.aab`. Raise `versionCode` in
+   `android/app/build.gradle` by 1 for every upload. If the key is lost, Google can reset it
+   (Play Console → App signing → Request upload key reset).
 2. Upload the `.aab` to Google Play Console → *Testing → Internal testing* first, then *Production*.
 3. Turn on **Play App Signing** (default). Copy its SHA-256 fingerprint for app links (below).
 
