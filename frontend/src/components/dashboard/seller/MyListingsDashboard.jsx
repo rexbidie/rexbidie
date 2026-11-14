@@ -67,7 +67,8 @@ const attentionItems = (auctions, now) => {
 const TABS = [
     { id: "live", label: "Live", test: (a, now) => isLive(a, now) },
     { id: "action", label: "Needs action", test: null },
-    { id: "waiting", label: "Waiting for approval", test: (a) => WAITING.includes(a.status) || a.pendingEdit?.status === "pending" },
+    // Unpaid extras aren't with RexBid yet: those show under Needs action only.
+    { id: "waiting", label: "Waiting for approval", test: (a) => (WAITING.includes(a.status) && a.status !== "awaiting_payment") || a.pendingEdit?.status === "pending" },
     { id: "ended", label: "Ended / unsold", test: (a, now) => ENDED.includes(a.status) || (a.status === "active" && !isLive(a, now)) },
     { id: "sold", label: "Sold", test: (a) => SOLD.includes(a.status) },
     { id: "all", label: "All", test: () => true },
