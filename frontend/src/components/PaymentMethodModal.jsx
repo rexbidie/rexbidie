@@ -1,15 +1,16 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { CreditCard, ShieldCheck, Loader, Plus, ArrowLeft, Check } from "lucide-react";
 import { useStripe, useElements, CardElement, Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { toast } from "react-hot-toast";
 import axiosInstance from "../utils/axiosInstance";
+import { trackEvent } from "../utils/ga.js";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 // Inner component so it can use useStripe/useElements
 const PaymentMethodModalInner = forwardRef((props, ref) => {
-    const { isOpen, onClose, onCardAdded } = props;
+    const { isOpen, onClose, onCardAdded, trackingContext = {} } = props;
 
     const stripe = useStripe();
     const elements = useElements();
@@ -21,6 +22,25 @@ const PaymentMethodModalInner = forwardRef((props, ref) => {
         hasStripeCustomer: false,
         hasCard: false,
     });
+
+    // ---------- Funnel tracking ----------
+    // bidder_verification_start → _step (card_form, card_submit) → _complete (fired by parent)
+    // with _error / _abandon showing where and why people drop out.
+    const hadErrorRef = useRef(false);
+    const track = (name, params = {}) =>
+        trackEvent(name, { verification_type: "card_link", ...trackingContext, ...params });
+
+    useEffect(() => {
+        if (!isOpen) return;
+        hadErrorRef.current = false;
+        track("bidder_verification_start");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    const trackError = (error_source, error_code, extra = {}) => {
+        hadErrorRef.current = true;
+        track("bidder_verification_error", { error_source, error_code: String(error_code || "unknown"), ...extra });
+    };
 
     // Fetch billing status when the modal opens
     useEffect(() => {
@@ -54,11 +74,18 @@ const PaymentMethodModalInner = forwardRef((props, ref) => {
 
     if (!isOpen) return null;
 
-    const handleProceed = () => setStep("card");
+    const handleProceed = () => {
+        track("bidder_verification_step", { step: "card_form" });
+        setStep("card");
+    };
 
-    const handleBack = () => setStep("notice");
+    const handleBack = () => {
+        track("bidder_verification_step", { step: "back_to_notice" });
+        setStep("notice");
+    };
 
     const handleClose = () => {
+        track("bidder_verification_abandon", { last_step: step, had_error: hadErrorRef.current });
         setStep("notice");
         onClose();
     };
@@ -67,17 +94,20 @@ const PaymentMethodModalInner = forwardRef((props, ref) => {
         e.preventDefault();
 
         if (!stripe || !elements) {
+            trackError("stripe", "not_initialized");
             toast.error("Stripe not initialized");
             return;
         }
 
         const cardElement = elements.getElement(CardElement);
         if (!cardElement) {
+            trackError("client", "card_element_missing");
             toast.error("Please enter your card details");
             return;
         }
 
         setSubmitting(true);
+        track("bidder_verification_step", { step: "card_submit" });
 
         try {
             const { error, paymentMethod } = await stripe.createPaymentMethod({
@@ -86,6 +116,8 @@ const PaymentMethodModalInner = forwardRef((props, ref) => {
             });
 
             if (error) {
+                // e.g. card_declined / incorrect_number / incomplete_cvc — no card data is sent
+                trackError("stripe", error.code || error.type, { decline_code: error.decline_code || "" });
                 toast.error(`Card error: ${error.message}`);
                 return;
             }
@@ -113,9 +145,14 @@ const PaymentMethodModalInner = forwardRef((props, ref) => {
                 // Fire the resume callback
                 onCardAdded?.();
             } else {
+                trackError("server", data.errorCode || "unsuccessful");
                 toast.error(data.message || "Failed to add card");
             }
         } catch (error) {
+            trackError(
+                "server",
+                error?.response?.data?.errorCode || `http_${error?.response?.status || "network"}`
+            );
             const msg =
                 error?.response?.data?.message ||
                 error.message ||

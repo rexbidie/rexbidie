@@ -9,7 +9,7 @@ import { toast } from 'react-hot-toast';
 import axiosInstance from '../utils/axiosInstance';
 import { useAuth } from '../contexts/AuthContext';
 import useCountryStates from '../hooks/useCountryStates';
-import { getGaClientId } from '../utils/ga.js';
+import { getGaClientId, trackEvent } from '../utils/ga.js';
 import { trackMetaRegistration } from '../utils/metaPixel.js';
 import { isNativeApp } from '../native/platform';
 
@@ -39,6 +39,20 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
         useCountries().then(setCountries).catch(() => { });
     }, []);
 
+    // Funnel tracking: the login/register wall shown when a guest tries to bid/offer
+    const gateAction = pendingAction?.type || 'bid';
+    useEffect(() => {
+        if (isOpen) {
+            trackEvent('bid_auth_gate_view', { action: gateAction, auth_tab: activeTab });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    const handleClose = () => {
+        trackEvent('bid_auth_gate_abandon', { action: gateAction, auth_tab: activeTab });
+        onClose();
+    };
+
     // ---------- LOGIN ----------
     const {
         register: loginRegister,
@@ -67,6 +81,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                 localStorage.setItem('user', JSON.stringify(user));
                 setUser(user);
                 toast.success('Logged in successfully');
+                trackEvent('bid_auth_gate_complete', { action: gateAction, auth_method: 'login' });
                 onAuthSuccess(user);
             }
         } catch (err) {
@@ -74,6 +89,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
 
             // Account doesn't exist → switch to Register tab, prefill email
             if (/no user found|user.*not.*found|not.*exist/i.test(msg)) {
+                trackEvent('bid_auth_gate_error', { action: gateAction, auth_method: 'login', reason: 'no_account' });
                 toast.error('No user found. Please register.');
                 regSetValue('email', data.email.toLowerCase().trim());
                 regSetValue('password', '');
@@ -82,6 +98,11 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             }
 
             // Everything else (wrong password, server error, etc.) → normal toast
+            trackEvent('bid_auth_gate_error', {
+                action: gateAction,
+                auth_method: 'login',
+                reason: err?.response?.status === 401 ? 'bad_credentials' : `http_${err?.response?.status || 'network'}`,
+            });
             toast.error(msg || 'Login failed');
         } finally {
             setIsLoading(false);
@@ -160,16 +181,26 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             }
 
             toast.success('Account created 🎉');
+            trackEvent('bid_auth_gate_complete', { action: gateAction, auth_method: 'register' });
             onAuthSuccess(user);
         } catch (err) {
             const msg = err?.response?.data?.message || '';
             if (/already exists/i.test(msg)) {
+                trackEvent('bid_auth_gate_error', { action: gateAction, auth_method: 'register', reason: 'already_exists' });
                 toast.error(msg);
                 regSetValue('email', '');
                 setActiveTab('login');   // ← suggest login
                 return;
             }
+            trackEvent('bid_auth_gate_error', {
+                action: gateAction,
+                auth_method: 'register',
+                reason: `http_${err?.response?.status || 'network'}`,
+            });
             toast.error(msg || 'Registration failed');
+        } finally {
+            // Without this the button stays stuck on "Creating account…" after any failed attempt
+            setIsLoading(false);
         }
     };
 
@@ -188,7 +219,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                         <img src={darkLogo} alt="logo" className="h-8" />
                         <span className="text-sm text-gray-500">{amountLabel}</span>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+                    <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-full">
                         <X size={20} />
                     </button>
                 </div>
