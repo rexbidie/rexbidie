@@ -82,7 +82,9 @@ const BRAND_NAME = 'RexBid';
 const BRAND_TAGLINE = 'Ireland\'s Marketplace for Machinery & Commercials';
 
 // Contact/Support info
-const SUPPORT_EMAIL = process.env.EMAIL_USER;
+// Contact address shown to customers in emails (footer, "contact us" links).
+// Separate from EMAIL_USER, the Google account the site sends from.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "info@rexbid.ie";
 const SUPPORT_PHONE = '';
 const COMPANY_LOCATION = 'Ireland';
 const DELIVERY_PARTNER_EMAILS = (process.env.DELIVERY_PARTNER_EMAILS || "seamus@evolveauto.ie")
