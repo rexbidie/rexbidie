@@ -208,25 +208,6 @@ function SingleAuction() {
         setPendingAction(null);
     };
 
-    // Open the payment method modal, remembering what action to resume
-    const requirePaymentMethod = (action) => {
-        setPendingAction(action);
-        setIsPaymentModalOpen(true);
-
-        // bidder_verification_start — fires when verification is triggered
-        if (auction?._id) {
-            gtag('event', 'bidder_verification_start', {
-                listing_id: auction._id,
-                item_name: auction.title,
-                category: auction.categories?.[1] || auction.categories?.[0] || '',
-                auction_type: auction.auctionType,
-                user_type: user?.userType || 'bidder',
-                verification_type: 'card_link',
-                action: action?.type || 'bid'   // 'bid' | 'offer'
-            });
-        }
-    };
-
     // Called when the card is successfully added inside the modal
     const handleCardAdded = () => {
         setIsPaymentModalOpen(false);
@@ -1683,6 +1664,11 @@ function SingleAuction() {
                 isOpen={isPaymentModalOpen}
                 onClose={handleClosePaymentModal}
                 onCardAdded={handleCardAdded}
+                trackingContext={{
+                    listing_id: auction?._id,
+                    auction_type: auction?.auctionType,
+                    action: pendingAction?.type || 'bid',
+                }}
             />
 
             <AuthBidModal
