@@ -12,7 +12,7 @@ import { Loader, CreditCard } from "lucide-react";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
-const PaymentForm = ({ payment, auctionId, onSuccess, onClose, confirmUrl }) => {
+const PaymentForm = ({ payment, auctionId, onSuccess, onClose, confirmUrl, onPaid }) => {
     const stripe = useStripe();
     const elements = useElements();
     const [processing, setProcessing] = useState(false);
@@ -77,6 +77,13 @@ const PaymentForm = ({ payment, auctionId, onSuccess, onClose, confirmUrl }) => 
             setError(error.message);
             toast.error(error.message);
             setProcessing(false);
+            return;
+        }
+
+        if (paymentIntent?.status === "succeeded" && onPaid) {
+            // Paying before the listing exists: hand the payment back to the form.
+            setProcessing(false);
+            onPaid(paymentIntent);
             return;
         }
 
@@ -236,7 +243,7 @@ const PaymentForm = ({ payment, auctionId, onSuccess, onClose, confirmUrl }) => 
 
 // Also used for Featured / Meta Boost bought from the listing menu: pass
 // title, intro and confirmUrl (POST /api/v1/auctions/:id/promote/confirm).
-const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSuccess, title, intro, confirmUrl }) => {
+const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSuccess, title, intro, confirmUrl, onPaid }) => {
     if (!isOpen || !payment) return null;
 
     return (
@@ -255,6 +262,7 @@ const ListingExtrasPaymentModal = ({ isOpen, onClose, payment, auctionId, onSucc
                         onSuccess={onSuccess}
                         onClose={onClose}
                         confirmUrl={confirmUrl}
+                        onPaid={onPaid}
                     />
                 </Elements>
             </div>
