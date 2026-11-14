@@ -536,40 +536,96 @@ const contactConfirmationEmail = async (name, email) => {
     }
 };
 
+// People new users can ring for help (also on the website: Sell page, footer, policy).
+const HELP_CONTACTS = [
+    { name: "Darren", phone: "+353 87 203 9257" },
+    { name: "Shane", phone: "+353 85 762 8834" },
+];
+// Same wording as frontend/src/utils/fees.js.
+const buyerFeeShort = "6% up to €2,000, then 3%, max €500";
+// Seller fees are waived on sales before this date (frontend/src/utils/fees.js).
+const SELLER_FEES_FREE_UNTIL = new Date("2027-01-01T00:00:00Z");
+
+const helpContactsBlock = (heading = "Questions? Give us a call") => `
+    <div style="background: ${BRAND_COLORS.grayBg}; border: 1px solid ${BRAND_COLORS.grayBorder}; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;">
+        <p style="margin: 0 0 6px 0; font-size: 17px; font-weight: bold; color: ${BRAND_COLORS.secondary};">${heading}</p>
+        <p style="margin: 0 0 14px 0;">If you have any questions about how RexBid works, how to bid or how to sell, give us a call. We're happy to help.</p>
+        ${HELP_CONTACTS.map((c) => `
+            <p style="margin: 6px 0; font-size: 16px;">
+                <strong>${c.name}</strong>&nbsp;
+                <a href="tel:${c.phone.replace(/\s+/g, "")}" style="color: ${BRAND_COLORS.primary}; font-weight: bold; text-decoration: none;">${c.phone}</a>
+            </p>`).join("")}
+    </div>
+`;
+
+const welcomeStep = (n, title, text) => `
+    <tr>
+        <td style="vertical-align: top; padding: 8px 12px 8px 0; width: 32px;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: ${BRAND_COLORS.primary}; color: #ffffff; font-weight: bold; text-align: center; line-height: 28px;">${n}</div>
+        </td>
+        <td style="vertical-align: top; padding: 8px 0;">
+            <p style="margin: 0; font-weight: bold; color: ${BRAND_COLORS.secondary};">${title}</p>
+            <p style="margin: 2px 0 0 0; color: ${BRAND_COLORS.text};">${text}</p>
+        </td>
+    </tr>`;
+
 // 3. Welcome email for user
+// Buyers get "how to bid" steps; sellers (seller / company / broker accounts)
+// get "how to sell" steps. Both get the people to ring.
 const welcomeEmail = async (user) => {
     try {
+        const name = escapeHtml(user.firstName || user.companyName || user.username || "there");
+        const type = user.userType || "bidder";
+        const isSeller = ["seller", "company", "broker"].includes(type);
+        const sellerFeesFree = Date.now() < SELLER_FEES_FREE_UNTIL.getTime();
+
+        const buyerSteps = `
+            ${welcomeStep(1, "Add your card", `You need a card on your account before you can bid. It only takes a minute in <a href="${FRONTEND_URL}/bidder/billing" style="color: ${BRAND_COLORS.primary};">Billing</a>.`)}
+            ${welcomeStep(2, "Find a machine and watch it", `Browse the <a href="${FRONTEND_URL}/auctions" style="color: ${BRAND_COLORS.primary};">listings</a> and tap the heart to watch a lot. We'll remind you before it closes. Got a question about a machine? Ask the seller in the listing's Questions tab.`)}
+            ${welcomeStep(3, "Bid, or set a maximum bid", "Enter your maximum and we'll bid for you, only as much as needed to keep you in the lead. Lots close one after another on sale night, and a bid in the last couple of minutes adds a little extra time, so nobody gets sniped.")}
+            ${welcomeStep(4, "Win, pay and collect", `If you win, we email your payment details. Payment is due within 48 hours, and collection is within 3 working days of payment. A buyer fee applies (${buyerFeeShort}). Need transport? <a href="${FRONTEND_URL}/delivery-partner-quote" style="color: ${BRAND_COLORS.primary};">Get a delivery quote</a>.`)}`;
+
+        const area = type === "company" ? "company" : type === "broker" ? "broker" : "seller";
+        const sellerSteps = `
+            ${welcomeStep(1, "List your machine", `<a href="${FRONTEND_URL}/${area}/auctions/create" style="color: ${BRAND_COLORS.primary};">Create a listing</a> with good photos, the hours, the condition and any faults. Clear, honest listings get more bids. Prefer us to do it? Send the photos and details to Darren on WhatsApp and we'll list it for you.`)}
+            ${welcomeStep(2, "Set your reserve", "Set the lowest price you'll accept. It's kept private, and the machine only sells if bidding reaches it.")}
+            ${welcomeStep(3, "Answer buyers' questions", "Buyers ask questions on the listing and we email you when one comes in. Quick, clear answers build confidence and bring more bids.")}
+            ${welcomeStep(4, "Get paid", `When it sells, the buyer pays RexBid and collects within 3 working days. We pay you once the machine is collected.${sellerFeesFree ? " There are no seller fees on sales before 1 January 2027." : ""}`)}`;
+
         const content = `
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="text-align: center;">Welcome to ${BRAND_NAME}, ${user.firstName || user.companyName || user.username}!</h2>
+            <h2 style="text-align: center; margin-bottom: 8px;">Welcome to ${BRAND_NAME}, ${name}!</h2>
+            <p style="text-align: center; margin-top: 0; color: ${BRAND_COLORS.textLight};">Ireland's online auction for tractors, plant and farm machinery.</p>
+
+            <p>Thanks for joining. Here's how to get started${isSeller ? " selling" : ""}:</p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin: 10px 0 20px 0;">
+                ${isSeller ? sellerSteps : buyerSteps}
+            </table>
+
+            <div style="text-align: center; margin: 25px 0 10px 0;">
+                ${isSeller
+                    ? createButton("List a machine", `${FRONTEND_URL}/${area}/auctions/create`, "primary")
+                    : createButton("Browse listings", `${FRONTEND_URL}/auctions`, "primary")}
             </div>
-            
-            <p>We're thrilled to welcome you to ${BRAND_NAME}. Your ${user.userType || 'bidder'} account has been successfully created.</p>
-            
-            ${createInfoCard(`
-                <p style="margin: 0 0 12px 0;"><strong>Account Details</strong></p>
-                ${createSummaryRow('Name:', `${user.firstName || ''} ${user.lastName || ''}`)}
-                ${createSummaryRow('Email:', user.email)}
-                ${createSummaryRow('Account Type:', user.userType || 'Bidder')}
-            `)}
-            
-            <div style="text-align: center; margin: 25px 0;">
-                ${createButton('Go to Profile', `${FRONTEND_URL}/${user?.userType || 'bidder'}/profile`, 'primary')}
-            </div>
-            
-            <div style="text-align: center; margin: 15px 0;">
-                ${createButton('Browse Auctions', `${FRONTEND_URL}/auctions`, 'outline')}
-            </div>
-            
-            <p>Need help getting started? Check out our FAQ section or contact our support team - we're here to help!</p>
+            <p style="text-align: center; margin: 0 0 10px 0; font-size: 14px;">
+                <a href="${FRONTEND_URL}/about" style="color: ${BRAND_COLORS.primary};">How RexBid works</a>
+                &nbsp;·&nbsp;
+                <a href="${FRONTEND_URL}/catalogues" style="color: ${BRAND_COLORS.primary};">Upcoming sale dates</a>
+                &nbsp;·&nbsp;
+                <a href="${FRONTEND_URL}/faqs" style="color: ${BRAND_COLORS.primary};">FAQs</a>
+            </p>
+
+            ${helpContactsBlock()}
+
+            <p style="font-size: 13px; color: ${BRAND_COLORS.textLight};">You signed up with ${escapeHtml(user.email)}. You can update your details any time in <a href="${FRONTEND_URL}/${type}/profile" style="color: ${BRAND_COLORS.primary};">your profile</a>.</p>
         `;
 
-        const html = baseTemplate(content, `Welcome, ${user.firstName || user.companyName || user.username}`);
+        const html = baseTemplate(content, `Welcome to ${BRAND_NAME}`);
 
         const info = await transporter.sendMail({
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: user.email,
-            subject: `Welcome to ${BRAND_NAME}, ${user.firstName || user.companyName || user.username}!`,
+            subject: `Welcome to ${BRAND_NAME}, ${user.firstName || user.companyName || user.username || ""}: here's how to get started`.replace(", :", ":"),
             html
         });
 
