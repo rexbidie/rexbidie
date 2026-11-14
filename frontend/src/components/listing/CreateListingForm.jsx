@@ -435,6 +435,13 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
     const [loadingCategories, setLoadingCategories] = useState(true);
 
     const [extrasPayment, setExtrasPayment] = useState(null);
+    // Featured / Meta Boost are paid before the listing is submitted.
+    // paidExtras: { id, key } once paid (key = what was paid for), so a retry
+    // after a failed submit doesn't charge again; the choices lock once paid.
+    const [paidExtras, setPaidExtras] = useState(null);
+    const pendingSubmitRef = useRef(null);
+    const paidExtrasOverrideRef = useRef(null);
+    const [startingPayment, setStartingPayment] = useState(false);
     const [pendingAuctionId, setPendingAuctionId] = useState(null);
     const [extrasPricing, setExtrasPricing] = useState(null);
 
@@ -849,7 +856,31 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
         setUploadedDocuments(uploadedDocuments.filter((_, i) => i !== index));
     };
 
+    const extrasKeyFor = (data) => `${Boolean(data.featuredRequested)}|${selectedMetaPackage?.id || ''}`;
+
     const createAuctionHandler = async (auctionData) => {
+        // Featured / Meta Boost: take the card payment first. Nothing is saved
+        // until it's paid, so the seller never has an unpaid "submitted" listing.
+        const paid = paidExtrasOverrideRef.current || paidExtras;
+        const wantsExtras = Boolean(auctionData.featuredRequested) || Boolean(selectedMetaPackage?.id);
+        if (wantsExtras && paid?.key !== extrasKeyFor(auctionData)) {
+            try {
+                setStartingPayment(true);
+                const { data } = await axiosInstance.post('/api/v1/auctions/extras/payment-intent', {
+                    featuredRequested: Boolean(auctionData.featuredRequested),
+                    metaBoostPackage: selectedMetaPackage?.id || '',
+                    title: auctionData.title,
+                });
+                pendingSubmitRef.current = auctionData;
+                setExtrasPayment(data.data.payment);
+            } catch (err) {
+                toast.error(err?.response?.data?.message || 'Could not start the payment. Please try again.');
+            } finally {
+                setStartingPayment(false);
+            }
+            return;
+        }
+
         try {
             setIsLoading(true);
             const accessToken = localStorage.getItem('accessToken');
@@ -891,6 +922,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             if (selectedMetaPackage) {
                 formData.append('metaBoostPackage', selectedMetaPackage.id);
             }
+            if (wantsExtras && paid?.id) formData.append('extrasPaymentIntentId', paid.id);
             formData.append('features', auctionData.features || '');
             const isTimed =
                 auctionData.auctionType === 'standard' ||
@@ -975,19 +1007,12 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
             );
 
             if (data && data.success) {
-                if (data.data?.paymentSetupFailed) {
-                    toast(
-                        "Your listing is saved but NOT submitted, because payment for the extras couldn't be started. Pay or remove the extras from All Auctions in your dashboard.",
-                        { duration: 10000 }
-                    );
-                } else {
-                    toast.success(
-                        data.data?.payment
-                            ? "Listing saved. Complete payment below to submit it for review."
-                            : "Thanks! We'll check your listing within 12 hours and email you when it's live.",
-                        { duration: 8000 }
-                    );
-                }
+                toast.success(
+                    data.data?.auction?.status === 'active'
+                        ? "Thanks! Your listing is live."
+                        : "Thanks! Your listing is submitted. We'll check it within 12 hours and email you when it's live.",
+                    { duration: 8000 }
+                );
 
                 trackMeta("Lead", {
                     content_ids: data.data?.auction?._id ? [String(data.data.auction._id)] : undefined,
@@ -1008,23 +1033,26 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                     currency: userCurrency,
                 });
 
-                // NEW: if a payment is required, open the modal and stop here
-                if (data.data?.payment) {
-                    setExtrasPayment(data.data.payment);
-                    setPendingAuctionId(data.data.auction._id);
-                    return;   // ← don't reset / navigate yet
-                }
-
-                // No payment → finish as before
                 finishAuctionCreation();
             }
         } catch (error) {
             const errorMessage = error?.response?.data?.message || 'Failed to create auction';
-            toast.error(errorMessage);
+            toast.error(
+                paid?.id
+                    ? `${errorMessage} Your Featured / Meta Boost payment is saved: fix this and submit again, you won't be charged twice.`
+                    : errorMessage,
+                { duration: paid?.id ? 12000 : 6000 }
+            );
             console.log('Create auction error:', error);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Called straight after the extras payment, before React re-renders.
+    const submitAfterPayment = (data, paid) => {
+        paidExtrasOverrideRef.current = paid;
+        createAuctionHandler(data).finally(() => { paidExtrasOverrideRef.current = null; });
     };
 
     const finishAuctionCreation = () => {
@@ -1037,8 +1065,10 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
         setSelectedParent(null);
         setExtrasPayment(null);
         setPendingAuctionId(null);
+        setPaidExtras(null);
+        pendingSubmitRef.current = null;
         reset();
-        navigate(`${basePath}/auctions/all`);
+        navigate(`${basePath}/dashboard`);
     };
 
     // Display price for an extras key, using server-supplied pricing when
@@ -1080,19 +1110,29 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
 
                 <ListingExtrasPaymentModal
                     isOpen={!!extrasPayment}
+                    title="Pay for Featured / Meta Boost"
+                    intro="Your listing is submitted as soon as this payment goes through. Nothing is saved until then."
                     onClose={() => {
-                        // Seller abandoned payment — draft stays in their account, admin sees it unpaid
+                        // Not paid: nothing was saved. Stay on the form.
+                        setExtrasPayment(null);
+                        pendingSubmitRef.current = null;
                         toast(
-                            "Your listing is saved but NOT submitted. It will only be sent for approval once the Featured / Meta Boost payment is made. Pay or remove the extras from All Auctions in your dashboard.",
-                            { duration: 12000 }
+                            "Your listing hasn't been submitted. Pay for Featured / Meta Boost to submit it, or untick them and submit without.",
+                            { duration: 10000 }
                         );
-                        finishAuctionCreation();
                     }}
                     payment={extrasPayment}
                     auctionId={pendingAuctionId}
-                    onSuccess={() => {
-                        toast.success("Payment confirmed. Listing submitted for review!");
-                        finishAuctionCreation();
+                    onPaid={(paymentIntent) => {
+                        const data = pendingSubmitRef.current;
+                        const paid = { id: paymentIntent.id, key: data ? extrasKeyFor(data) : null };
+                        setPaidExtras(paid);
+                        setExtrasPayment(null);
+                        toast.success("Payment received. Submitting your listing…");
+                        if (data) {
+                            // State updates aren't visible inside this call yet: submit with the id directly.
+                            submitAfterPayment(data, paid);
+                        }
                     }}
                 />
 
@@ -1748,7 +1788,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                         Want more bidders? Add one of these paid options for extra reach.
                                                     </p>
                                                     <label htmlFor="featuredRequested" className="flex items-start gap-2 rounded-lg border border-[#D19F3E]/50 bg-white p-3 cursor-pointer">
-                                                        <input type="checkbox" id="featuredRequested" {...register('featuredRequested')} className="mt-1" />
+                                                        <input type="checkbox" id="featuredRequested" {...register('featuredRequested')} aria-disabled={!!paidExtras} onClick={(e) => { if (paidExtras) e.preventDefault(); }} className="mt-1" />
                                                         <span>
                                                             <span className="font-semibold text-gray-900">
                                                                 Feature my listing: {formatExtrasPrice('featured')}
@@ -1771,6 +1811,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                                                 type="radio"
                                                                                 value={pkg.id}
                                                                                 checked={metaBoostPackage === pkg.id}
+                                                                                disabled={!!paidExtras}
                                                                                 onChange={() => setValue('metaBoostPackage', pkg.id, { shouldDirty: true })}
                                                                             />
                                                                             <span className="font-medium text-gray-900">
@@ -1962,14 +2003,23 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                             <ArrowRight size={18} className="ml-2" />
                                         </button>
                                     ) : (
-                                        <button
-                                            type="submit"
-                                            disabled={isLoading}
-                                            className="flex items-center px-6 py-2 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 text-white hover:from-orange-500 hover:via-orange-600 hover:to-orange-700 rounded-lg transition-colors disabled:opacity-60"
-                                        >
-                                            {isLoading ? 'Submitting...' : 'Submit for review'}
-                                            <ArrowRight size={18} className="ml-2" />
-                                        </button>
+                                        <div className="flex flex-col items-end gap-2">
+                                            {(watch('featuredRequested') || selectedMetaPackage?.id) && (
+                                                <p className="text-sm text-gray-700 text-right max-w-sm">
+                                                    {paidExtras
+                                                        ? 'Featured / Meta Boost paid. Submit to send your listing for review.'
+                                                        : "You'll pay for Featured / Meta Boost by card before your listing is submitted. Untick them to submit without."}
+                                                </p>
+                                            )}
+                                            <button
+                                                type="submit"
+                                                disabled={isLoading || startingPayment}
+                                                className="flex items-center px-6 py-2 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 text-white hover:from-orange-500 hover:via-orange-600 hover:to-orange-700 rounded-lg transition-colors disabled:opacity-60"
+                                            >
+                                                {isLoading ? 'Submitting...' : startingPayment ? 'Starting payment…' : (watch('featuredRequested') || selectedMetaPackage?.id) && !paidExtras ? 'Pay and submit for review' : 'Submit for review'}
+                                                <ArrowRight size={18} className="ml-2" />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </form>

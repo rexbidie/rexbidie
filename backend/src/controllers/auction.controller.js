@@ -131,6 +131,47 @@ export const createAuction = async (req, res) => {
       endDate,
     } = req.body;
 
+    // ── Featured / Meta Boost are paid BEFORE the listing is created ──
+    // The listing form takes the card payment first (POST /extras/payment-intent)
+    // and sends its id; without a matching successful payment the listing isn't
+    // created, so a seller never ends up with an unpaid listing they think is submitted.
+    const wantedExtras = calculateListingExtras({
+      featuredRequested: featuredRequested === "true" || featuredRequested === true,
+      metaBoostPackage: ["boost", "plus", "max"].includes(metaBoostPackage) ? metaBoostPackage : "",
+      currency: req.body.baseCurrency || "EUR",
+    });
+    let prepaidExtras = null;
+    if (wantedExtras.total > 0) {
+      const piId = req.body.extrasPaymentIntentId;
+      const needPay = "Please pay for Featured / Meta Boost to submit your listing, or untick them and submit without.";
+      if (!piId) return res.status(402).json({ success: false, code: "EXTRAS_PAYMENT_REQUIRED", message: needPay });
+      let pi;
+      try {
+        pi = await stripe.paymentIntents.retrieve(piId);
+      } catch {
+        return res.status(402).json({ success: false, code: "EXTRAS_PAYMENT_REQUIRED", message: needPay });
+      }
+      if (pi?.status !== "succeeded") {
+        return res.status(402).json({ success: false, code: "EXTRAS_PAYMENT_REQUIRED", message: "Your Featured / Meta Boost payment hasn't gone through yet. Please complete it, or untick them and submit without." });
+      }
+      const ok = pi &&
+        pi.metadata?.type === "listing_extras_prepaid" &&
+        pi.metadata?.sellerId === seller._id.toString() &&
+        pi.amount === Math.round(wantedExtras.total * 100) &&
+        String(pi.currency).toUpperCase() === wantedExtras.currency;
+      if (!ok) {
+        return res.status(402).json({
+          success: false,
+          code: "EXTRAS_PAYMENT_MISMATCH",
+          message: "That payment doesn't match the extras you've chosen. Please choose the same extras you paid for, or contact RexBid.",
+        });
+      }
+      if (await Auction.exists({ "extrasPayment.paymentIntentId": piId })) {
+        return res.status(409).json({ success: false, code: "EXTRAS_PAYMENT_USED", message: "That payment has already been used for another listing. Please contact RexBid." });
+      }
+      prepaidExtras = { pi, extras: wantedExtras };
+    }
+
     let categoriesArray = [];
     if (req.body.categories) {
       try {
@@ -517,11 +558,17 @@ export const createAuction = async (req, res) => {
       currency: auctionData.baseCurrency,
     });
 
-    // If extras are required on an always-available auction, defer activation
-    // until payment lands. (Timed auctions start as draft anyway.)
-    // Listings with paid extras aren't submitted until they're paid.
+    // Extras were paid before submitting (checked at the top).
     if (extras.total > 0) {
-      auctionData.status = 'awaiting_payment';
+      auctionData.extrasPayment = {
+        amount: extras.total,
+        currency: extras.currency,
+        status: "completed",
+        paidAt: new Date((prepaidExtras.pi.created || Date.now() / 1000) * 1000),
+        paymentIntentId: prepaidExtras.pi.id,
+        lineItems: extras.lineItems,
+      };
+      if (auctionData.featuredRequested) auctionData.isFeatured = true;
     }
 
     const auction = await Auction.create(auctionData);
@@ -543,8 +590,8 @@ export const createAuction = async (req, res) => {
     // Populate seller info for response
     await auction.populate("seller", "username companyName firstName lastName");
 
-    // ── Extras payment flow ──
-    if (extras.total > 0) {
+    // ── Extras payment flow (only for listings created before pay-first) ──
+    if (extras.total > 0 && !prepaidExtras) {
       // Record what is owed first, so the listing always shows a "Pay" button
       // in the seller's dashboard even if Stripe can't be reached right now.
       auction.extrasPayment = {
@@ -4839,5 +4886,41 @@ export const lowerStartPrice = async (req, res) => {
   } catch (error) {
     console.error("Lower start price error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * @desc    Start the card payment for Featured / Meta Boost before a listing is
+ *          submitted. The listing form pays first, then sends the payment id
+ *          with the listing (see createAuction).
+ * @route   POST /api/v1/auctions/extras/payment-intent  { featuredRequested, metaBoostPackage }
+ * @access  Private (seller)
+ */
+export const startPrepaidExtrasPayment = async (req, res) => {
+  try {
+    const seller = await User.findById(req.user._id);
+    const currency = seller?.currency === "GBP" ? "GBP" : "EUR";
+    const extras = calculateListingExtras({
+      featuredRequested: req.body?.featuredRequested === true || req.body?.featuredRequested === "true",
+      metaBoostPackage: ["boost", "plus", "max"].includes(req.body?.metaBoostPackage) ? req.body.metaBoostPackage : "",
+      currency,
+    });
+    if (!(extras.total > 0)) return res.status(400).json({ success: false, message: "No extras chosen." });
+    const customerId = await ensureExtrasCustomer(seller);
+    const pi = await stripe.paymentIntents.create({
+      amount: Math.round(extras.total * 100),
+      currency: currency.toLowerCase(),
+      customer: customerId,
+      description: `${extras.lineItems.map((l) => l.label).join(" + ")} for a new listing${req.body?.title ? `: "${String(req.body.title).slice(0, 80)}"` : ""}`,
+      payment_method_types: ["card"],
+      metadata: { type: "listing_extras_prepaid", sellerId: seller._id.toString() },
+    });
+    res.json({
+      success: true,
+      data: { payment: { clientSecret: pi.client_secret, paymentIntentId: pi.id, amount: extras.total, currency, lineItems: extras.lineItems } },
+    });
+  } catch (error) {
+    console.error("Start extras payment error:", error);
+    res.status(500).json({ success: false, message: "Could not start the payment. Please try again." });
   }
 };

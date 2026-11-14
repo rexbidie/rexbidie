@@ -9,6 +9,7 @@ import {
     buyLiveBuyNow,
     submitListingWithoutExtras,
     changeBidIncrement,
+    startPrepaidExtrasPayment,
     setLiveBuyNowPrice,
     lowerStartPrice,
     discardPendingEdit,
@@ -63,6 +64,7 @@ auctionRouter.get('/won-auctions', auth, getWonAuctions);
 auctionRouter.get('/sold-auctions', authSeller, getSoldAuctions);
 auctionRouter.get('/top', getTopLiveAuctions);
 auctionRouter.get('/extras/pricing', getListingExtrasPricing);
+auctionRouter.post('/extras/payment-intent', authSeller, startPrepaidExtrasPayment);
 auctionRouter.post("/:id/retry-extras-payment", authSeller, retryExtrasPayment);
 auctionRouter.post("/:id/submit-without-extras", authSeller, submitListingWithoutExtras);
 auctionRouter.patch("/:id/increment", authSeller, changeBidIncrement);
