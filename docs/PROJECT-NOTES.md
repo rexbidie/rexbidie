@@ -40,8 +40,8 @@ MX → `smtp.google.com` · SPF includes `_spf.google.com` (and `spf.reg365.net`
 |---|---|---|
 | Buyer fee | 6% on first €2,000, 3% above, **max €500** per item | Admin commission settings; wording in `frontend/src/utils/fees.js` |
 | Seller fee | None on sales before **1 January 2027** (30 days' notice before any fee) | `fees.js` |
-| Featured listing | **€30 / £24**, paid by card when listing, no VAT | Stated in policy. **Card payment at listing not yet built.** |
-| Facebook & Instagram ad | **€10 / €20 / €40** (£8 / £16 / £32 at a fixed £8 = €10), paid by card when listing, no VAT (RexBid not VAT registered) | Choice saved as `metaBoostPackage` on the auction. **Card payment at listing not yet built.** Hidden within 48h of sale close. |
+| Featured listing | **€30 / £24**, paid by card when listing, no VAT | Paid by card before the listing is submitted (`POST /api/v1/auctions/extras/payment-intent`). If the seller already paid for the same extras and no listing used that payment (e.g. the submit failed and they reloaded the form), that payment is reused instead of charging again (`backend/src/utils/prepaidExtras.js`). Admin dashboard lists any paid-but-unused extras payments. |
+| Facebook & Instagram ad | **€10 / €20 / €40** (£8 / £16 / £32 at a fixed £8 = €10), paid by card when listing, no VAT (RexBid not VAT registered) | Choice saved as `metaBoostPackage` on the auction; paid the same way as Featured (see above). Hidden within 48h of sale close. |
 | Minimum reserve | **€500** (sterling equivalent for £ listings) | `backend/src/utils/listingRules.js`, `frontend/src/utils/listingRules.js` |
 | Minimum no-reserve starting bid | **€400** (sterling equivalent) | same |
 | Payment | Card under €1,000; bank transfer from €1,000; within 48 hours | `backend/src/utils/manualPayment.js` (threshold) |

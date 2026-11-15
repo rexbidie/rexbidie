@@ -36,8 +36,20 @@ function Dashboard() {
         }
     };
 
+    // Featured / Meta Boost payments that went through but no listing used.
+    const [unusedExtras, setUnusedExtras] = useState([]);
+    const fetchUnusedExtras = async () => {
+        try {
+            const { data } = await axiosInstance.get('/api/v1/admin/unused-extras-payments');
+            if (data.success) setUnusedExtras(data.data || []);
+        } catch (err) {
+            console.error('Fetch unused extras payments error:', err);
+        }
+    };
+
     useEffect(() => {
         fetchAdminStats();
+        fetchUnusedExtras();
     }, []);
 
     const statsData = [
@@ -292,6 +304,28 @@ function Dashboard() {
                                     </div>
                                 ))}
                             </div>
+
+                            {unusedExtras.length > 0 && (
+                                <div className="bg-amber-50 rounded-xl p-6 shadow-sm border border-amber-300 mb-8">
+                                    <h3 className="text-lg font-semibold text-amber-900">Paid extras not on any listing</h3>
+                                    <p className="text-sm text-amber-800 mt-1 mb-4">
+                                        These Featured / Meta Boost payments went through but no listing used them. Apply them to the seller's listing or refund them in Stripe.
+                                    </p>
+                                    <ul className="divide-y divide-amber-200">
+                                        {unusedExtras.map((p) => (
+                                            <li key={p.paymentIntentId} className="py-2 text-sm flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+                                                <span className="text-amber-900">
+                                                    <strong>{p.currency === 'GBP' ? '£' : '€'}{p.amount}</strong> · {p.description || 'Listing extras'}
+                                                    {p.seller && <> · {p.seller.name} ({p.seller.email})</>}
+                                                </span>
+                                                <span className="text-xs text-amber-700 break-all">
+                                                    {new Date(p.createdAt).toLocaleString('en-IE')} · {p.paymentIntentId}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
 
                             {/* Highest Sale Highlight Card */}
                             {adminStats.highestSaleAuction && (

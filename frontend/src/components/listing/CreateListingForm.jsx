@@ -871,8 +871,18 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                     metaBoostPackage: selectedMetaPackage?.id || '',
                     title: auctionData.title,
                 });
+                const payment = data.data.payment;
+                if (payment?.alreadyPaid) {
+                    // Already paid for these extras on an earlier try that
+                    // didn't submit: use that payment, don't charge again.
+                    const paidBefore = { id: payment.paymentIntentId, key: extrasKeyFor(auctionData) };
+                    setPaidExtras(paidBefore);
+                    toast.success("You've already paid for these extras. Submitting your listing without charging you again…", { duration: 8000 });
+                    submitAfterPayment(auctionData, paidBefore);
+                    return;
+                }
                 pendingSubmitRef.current = auctionData;
-                setExtrasPayment(data.data.payment);
+                setExtrasPayment(payment);
             } catch (err) {
                 toast.error(err?.response?.data?.message || 'Could not start the payment. Please try again.');
             } finally {

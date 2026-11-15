@@ -31,6 +31,7 @@ import { authAdmin } from '../middlewares/auth.middleware.js';
 import { pendingEdits, approve as approveListingEdit, reject as rejectListingEdit } from '../controllers/listingEdit.controller.js';
 import upload from '../middlewares/multer.middleware.js';
 import { getAdminTransactions, getTransactionStats } from '../controllers/transaction.controller.js';
+import { getUnusedExtrasPayments } from '../controllers/auction.controller.js';
 
 const AdminRouter = Router();
 
@@ -73,6 +74,7 @@ AdminRouter.post('/auctions/:auctionId/manual-sell', authAdmin, manualSellAuctio
 // Sale Night Times: re-time the lots closing on a sale day
 AdminRouter.get('/sale-times', authAdmin, listSaleTimes);
 AdminRouter.post('/sale-times', authAdmin, saveSaleTimes);
+AdminRouter.get('/unused-extras-payments', authAdmin, getUnusedExtrasPayments);
 AdminRouter.get('/transactions', authAdmin, getAdminTransactions);
 AdminRouter.get('/transactions/stats', authAdmin, getTransactionStats);
 AdminRouter.put('/:id/payment-status', 
