@@ -39,6 +39,7 @@ import { submitWithoutExtras } from "../services/listingExtrasService.js";
 import { confirmPromotion, promotionOptions, startPromotion } from "../services/listingPromotionService.js";
 import { HOLD_EDIT_STATUSES, holdEditForApproval, changedFields, fileIds, deleteFiles, notifyAdminsOfResubmission, discardEdit } from "../services/listingEditService.js";
 import { getExtrasPricingMenu } from "../utils/listingExtras.js";
+import { findReusablePrepaidPayment, listUnusedPrepaidPayments } from "../utils/prepaidExtras.js";
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -143,8 +144,25 @@ export const createAuction = async (req, res) => {
     });
     let prepaidExtras = null;
     if (wantedExtras.total > 0) {
-      const piId = req.body.extrasPaymentIntentId;
+      let piId = req.body.extrasPaymentIntentId;
       const needPay = "Please pay for Featured / Meta Boost to submit your listing, or untick them and submit without.";
+      // No payment id sent (e.g. the form was reloaded after paying): use the
+      // seller's paid, unused payment for these extras if there is one.
+      if (!piId && seller.stripeCustomerId) {
+        try {
+          const reusable = await findReusablePrepaidPayment({
+            stripe,
+            AuctionModel: Auction,
+            customerId: seller.stripeCustomerId,
+            sellerId: seller._id.toString(),
+            amountCents: Math.round(wantedExtras.total * 100),
+            currency: wantedExtras.currency,
+          });
+          if (reusable) piId = reusable.id;
+        } catch (err) {
+          console.error("Reusable extras payment lookup failed:", err?.message);
+        }
+      }
       if (!piId) return res.status(402).json({ success: false, code: "EXTRAS_PAYMENT_REQUIRED", message: needPay });
       let pi;
       try {
@@ -4901,6 +4919,35 @@ export const lowerStartPrice = async (req, res) => {
  * @route   POST /api/v1/auctions/extras/payment-intent  { featuredRequested, metaBoostPackage }
  * @access  Private (seller)
  */
+/**
+ * @desc    Featured / Meta Boost payments that went through but aren't attached
+ *          to any listing and haven't been refunded, so admins can apply or
+ *          refund them.
+ * @route   GET /api/v1/admin/unused-extras-payments
+ * @access  Admin
+ */
+export const getUnusedExtrasPayments = async (req, res) => {
+  try {
+    const payments = await listUnusedPrepaidPayments({ stripe, AuctionModel: Auction });
+    const sellerIds = [...new Set(payments.map((p) => p.sellerId).filter(Boolean))];
+    const sellers = await User.find({ _id: { $in: sellerIds } }).select("username firstName lastName email").lean();
+    const byId = Object.fromEntries(sellers.map((s) => [String(s._id), s]));
+    res.json({
+      success: true,
+      data: payments.map((p) => {
+        const s = byId[p.sellerId];
+        return {
+          ...p,
+          seller: s ? { name: `${s.firstName || ""} ${s.lastName || ""}`.trim() || s.username, email: s.email } : null,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("Unused extras payments error:", error);
+    res.status(500).json({ success: false, message: "Could not load unused extras payments." });
+  }
+};
+
 export const startPrepaidExtrasPayment = async (req, res) => {
   try {
     const seller = await User.findById(req.user._id);
@@ -4912,6 +4959,31 @@ export const startPrepaidExtrasPayment = async (req, res) => {
     });
     if (!(extras.total > 0)) return res.status(400).json({ success: false, message: "No extras chosen." });
     const customerId = await ensureExtrasCustomer(seller);
+
+    // Already paid for these exact extras (e.g. the listing submit failed and
+    // the seller reloaded the form)? Use that payment instead of charging again.
+    try {
+      const reusable = await findReusablePrepaidPayment({
+        stripe,
+        AuctionModel: Auction,
+        customerId,
+        sellerId: seller._id.toString(),
+        amountCents: Math.round(extras.total * 100),
+        currency,
+      });
+      if (reusable) {
+        return res.json({
+          success: true,
+          data: {
+            payment: { alreadyPaid: true, paymentIntentId: reusable.id, amount: extras.total, currency, lineItems: extras.lineItems },
+          },
+        });
+      }
+    } catch (err) {
+      // Don't block the seller if the lookup fails; fall through to a new payment.
+      console.error("Reusable extras payment lookup failed:", err?.message);
+    }
+
     const pi = await stripe.paymentIntents.create({
       amount: Math.round(extras.total * 100),
       currency: currency.toLowerCase(),
