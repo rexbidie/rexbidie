@@ -1,5 +1,6 @@
 import {
     MailWarning,
+    Clock,
     LayoutDashboard,
     LogOut,
     Users,
@@ -87,6 +88,11 @@ const navigation = [
         name: 'Last Chance',
         path: '/admin/last-chance',
         icon: <ShoppingCart size={20} />
+    },
+    {
+        name: 'Sale Night Times',
+        path: '/admin/sale-times',
+        icon: <Clock size={20} />
     },
     {
         name: "Auction Dates",

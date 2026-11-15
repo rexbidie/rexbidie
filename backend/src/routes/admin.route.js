@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { listSaleTimes, saveSaleTimes } from '../controllers/saleTimes.controller.js';
 import { 
     getAdminStats,
     getAllUsers,
@@ -69,6 +70,9 @@ AdminRouter.put('/auctions/:id', authAdmin, upload.fields([
 ]), updateAuction);
 AdminRouter.get('/auctions/:auctionId/manual-sell/users', authAdmin, searchUsersForManualSell);
 AdminRouter.post('/auctions/:auctionId/manual-sell', authAdmin, manualSellAuction);
+// Sale Night Times: re-time the lots closing on a sale day
+AdminRouter.get('/sale-times', authAdmin, listSaleTimes);
+AdminRouter.post('/sale-times', authAdmin, saveSaleTimes);
 AdminRouter.get('/transactions', authAdmin, getAdminTransactions);
 AdminRouter.get('/transactions/stats', authAdmin, getTransactionStats);
 AdminRouter.put('/:id/payment-status', 
