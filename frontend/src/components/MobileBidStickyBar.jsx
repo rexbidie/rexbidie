@@ -1,5 +1,7 @@
 import { Gavel, Zap, Banknote, Clock, Gift, Users, ShieldCheck, Bell, Loader, Truck, Info, CheckSquare, Gauge } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import QuickBid from './bidding/QuickBid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -22,11 +24,14 @@ const MobileBidStickyBar = ({
   // ✅ NEW PROPS for inline mobile bidding
   bidAmount,
   setBidAmount,
-  minBidAmount,
-  onPlaceBid,
   bidding,
   countdown,
   onProxyBidClick,
+  // One-tap bidding
+  quickMin,
+  quickStep,
+  onQuickBid,
+  isLeading = false,
 }) => {
   const { days, hours, minutes, seconds, status: timeStatus } = timeRemaining;
   const isActive = timeStatus === 'counting-down' || timeStatus === 'always-available';
@@ -131,7 +136,69 @@ const MobileBidStickyBar = ({
     });
   };
 
+  // Keep the bid buttons on screen: when the bid controls in this card scroll
+  // out of view (e.g. looking at photos or the description), a slim bar with
+  // the price, time left and the same buttons sits above the bottom menu.
+  const bidControlsRef = useRef(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [navHeight, setNavHeight] = useState(0);
+  useEffect(() => {
+    const el = bidControlsRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => setControlsVisible(entry.isIntersecting), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [showBidForm]);
+  useEffect(() => {
+    const measure = () => setNavHeight(document.querySelector('.app-bottom-nav')?.offsetHeight || 0);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  const timeLeftShort = (() => {
+    const { days: d, hours: h, minutes: m, seconds: sec } = liveTimer;
+    const pad = (n) => String(n).padStart(2, '0');
+    if (Number(d) > 0) return `${d}d ${pad(h)}h`;
+    if (Number(h) > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+    return `${pad(m)}:${pad(sec)}`;
+  })();
+  const showFixedBar = showBidForm && !controlsVisible && typeof document !== 'undefined';
+  useEffect(() => {
+    document.body.classList.toggle('has-bid-bar', showFixedBar);
+    return () => document.body.classList.remove('has-bid-bar');
+  }, [showFixedBar]);
+
   return (
+    <>
+    {showFixedBar && createPortal(
+      <div
+        className="lg:hidden fixed left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_10px_rgba(0,0,0,0.12)] px-3 pt-2 pb-2"
+        style={{ bottom: navHeight }}
+      >
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="font-semibold text-gray-900 text-sm">
+            {formatCurrency(currentBid)}
+            {isLeading && <span className="ml-2 text-green-700 font-medium text-xs">You're winning</span>}
+            {userBidStatus === 'outbid' && <span className="ml-2 text-red-600 font-medium text-xs">Outbid</span>}
+          </span>
+          <span className="flex items-center gap-1 text-gray-700 font-medium tabular-nums">
+            <Clock size={13} /> {timeLeftShort}
+          </span>
+        </div>
+        <QuickBid
+          compact
+          minBid={quickMin}
+          step={quickStep}
+          symbol={currencySymbol}
+          amount={bidAmount}
+          setAmount={setBidAmount}
+          onBid={onQuickBid}
+          bidding={bidding}
+          isLeading={isLeading}
+        />
+      </div>,
+      document.body
+    )}
     <div className="lg:hidden bg-white border border-gray-200 rounded-lg shadow-sm mb-6 mt-8">
       <div className="p-4">
 
@@ -274,6 +341,19 @@ const MobileBidStickyBar = ({
           </div>
         </div>
 
+        {/* Last 24 hours, no bids yet: say a reserve applies (the progress bar below starts with the first bid) */}
+        {auction.auctionType === "reserve" &&
+          auction.status === "active" &&
+          timeStatus === "counting-down" &&
+          timeRemained > 0 &&
+          timeRemained < 24 * 60 * 60 * 1000 &&
+          auction.hasReserve &&
+          !(auction.bidCount > 0) && (
+            <p className="mt-2 inline-flex text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200">
+              Reserve Applies
+            </p>
+          )}
+
         {/* ----- RESERVE PROGRESS INDICATOR (only in last 24h) ----- */}
         {auction.auctionType === "reserve" &&
           auction.status === "active" &&
@@ -320,37 +400,19 @@ const MobileBidStickyBar = ({
             );
           })()}
 
-        {/* ============ NEW: Inline Mobile Bid Input ============ */}
+        {/* ============ One-tap bidding ============ */}
         {showBidForm && (
-          <div className="flex flex-col gap-2 w-full mt-4">
-            <div className="flex-1 min-w-0 relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium pointer-events-none">
-                {currencySymbol}
-              </span>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={bidAmount || ''}
-                autoFocus
-                onChange={(e) => setBidAmount(e.target.value)}
-                className="w-full pl-7 pr-3 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-2 focus:outline-primary text-sm"
-                placeholder={`Min ${minBidAmount?.toFixed(0)}`}
-                min={minBidAmount?.toFixed(0)}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={onPlaceBid}
-              disabled={bidding}
-              className="bg-[#D19F3E] hover:bg-[#b88a32] text-white py-2.5 px-4 rounded-md flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-60 whitespace-nowrap transition-colors"
-            >
-              {bidding ? (
-                <Loader size={16} className="animate-spin" />
-              ) : (
-                <Gavel size={18} />
-              )}
-              <span>Place Bid</span>
-            </button>
+          <div ref={bidControlsRef} className="w-full mt-4">
+            <QuickBid
+              minBid={quickMin}
+              step={quickStep}
+              symbol={currencySymbol}
+              amount={bidAmount}
+              setAmount={setBidAmount}
+              onBid={onQuickBid}
+              bidding={bidding}
+              isLeading={isLeading}
+            />
           </div>
         )}
 
@@ -460,6 +522,7 @@ const MobileBidStickyBar = ({
 
       </div>
     </div>
+    </>
   );
 };
 

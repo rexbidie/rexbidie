@@ -5,7 +5,10 @@ import { useAuth } from "../contexts/AuthContext";
 import useBodyScrollLock from "../hooks/useBodyScrollLock";
 
 const BidConfirmationModal = forwardRef((props, ref) => {
-    const { isOpen, onClose, onConfirm, auction, bidAmount } = props;
+    const { isOpen, onClose, onConfirm, auction, bidAmount, needsTerms = false, confirming = false } = props;
+    // First bid of the night: the bidder ticks the Buyer Terms box once.
+    const [agreed, setAgreed] = useState(false);
+    useEffect(() => { if (isOpen) setAgreed(false); }, [isOpen]);
 
     const [serviceFee, setServiceFee] = useState(0);
     const [isCommissionEnabled, setIsCommissionEnabled] = useState(false);
@@ -175,6 +178,21 @@ const BidConfirmationModal = forwardRef((props, ref) => {
                             buyer's terms.
                         </a>
                     </p>
+                    {needsTerms && (
+                        <label className="flex items-start gap-3 rounded-md border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={agreed}
+                                onChange={(e) => setAgreed(e.target.checked)}
+                                className="mt-0.5 h-5 w-5 flex-shrink-0 accent-black"
+                            />
+                            <span>
+                                I agree to the{" "}
+                                <a href="/buyer-terms" target="_blank" className="text-blue-600 underline">Buyer Terms</a>{" "}
+                                and understand my bids are binding. You won't be asked again tonight: after this, each bid is placed with one tap.
+                            </span>
+                        </label>
+                    )}
                 </div>
 
                 {/* Action Buttons */}
@@ -190,9 +208,10 @@ const BidConfirmationModal = forwardRef((props, ref) => {
                         ref={ref}
                         onClick={onConfirm}
                         type="submit"
-                        className="flex-1 py-2 px-4 md:py-3 bg-black text-white rounded-md hover:bg-gray-900 font-medium transition-colors"
+                        disabled={(needsTerms && !agreed) || confirming}
+                        className="flex-1 py-2 px-4 md:py-3 bg-black text-white rounded-md hover:bg-gray-900 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        Place Bid
+                        {confirming ? "Placing bid..." : "Place Bid"}
                     </button>
                 </div>
 

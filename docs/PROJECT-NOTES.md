@@ -5,7 +5,7 @@ the site (owner, developer, or Claude in a new session) can pick up where things
 were left. **This repository is public: never put passwords, API keys, personal
 data or private business details in this file.**
 
-_Last updated: 14 November 2026_
+_Last updated: 15 November 2026_
 
 ---
 
@@ -239,8 +239,23 @@ Rules (`backend/src/utils/acceptTopBid.js`):
 
 ---
 
+## 3g. Faster bidding (Nov 2026)
+
+- **One-tap bid buttons** (`frontend/src/components/bidding/QuickBid.jsx`) on the listing page, phone and desktop: **Bid €X** (the next minimum bid) with − / + to change it by the bid increment; "Enter my own amount" still available. When the viewer is already winning, the button reads "Raise my bid to €X". Second taps while a bid is on its way are ignored.
+- **Buyer Terms once per auction night.** The first bid of the night shows the confirmation with an "I agree to the Buyer Terms" tick box; after that each bid goes straight through. Recorded on the user (`buyerTerms.acceptedAt` + `history` with time, lot, IP, browser) via `GET/POST /api/v1/users/me/buyer-terms` (`backend/src/utils/buyerTerms.js`). "Night" = same Irish calendar day; `BUYER_TERMS_EVERY_NIGHT=false` asks once per account instead. Bids are not refused server-side without it, so older app versions keep working.
+- **Phone layout.** The bid box no longer opens the keyboard when the page loads. When the bid buttons scroll off screen (looking at photos or the description), a slim bar with price, time left, winning/outbid and the same buttons sits above the bottom menu.
+- **Two bids at the same moment.** The bidder who loses the race sees "Someone else bid first… tap again" and the buttons move to the new price; no page refresh needed.
+- **Countdown on the listing page uses the server's clock** (`useAuctionCountDown.jsx` → `getServerNow()`), like the listing cards, so a phone with a wrong clock shows the right time left.
+- **Card check remembered for 10 minutes** (`backend/src/utils/paymentCheckCache.js`): the two Stripe calls before each bid run once, then are skipped for that bidder's same card for 10 minutes. In memory; a restart just checks again.
+- **Reserve progress on listing cards** (All Listings and Catalogue pages) in the last 24 hours, same rule as the listing page (`components/bidding/ReserveProgress.jsx`); "Reserve applies · no bids yet" before the first bid. The phone listing page now also shows "Reserve Applies" in the last 24 hours before the first bid. The Catalogue page now gets live price updates too.
+- "Bid must be at least" error now shows € / £ instead of $.
+- The iPhone/Android app gets these changes with its next app build (the app bundles the website code).
+
+---
+
 ## 4. Open to-do list (most important first)
 
+0b. **Rolling sale night** (later lots move back when one is extended) and a **Live sale** screen that follows the closing lot: planned after the 17 Nov sale; rehearse on a test sale night first.
 0a. **Accept highest bid go-live:** solicitor check of the new Buyer Terms / Payment Policy wording, then set `ACCEPT_TOP_BID_BIDS_FROM` on Render to the time they went live (section 3f).
 0. **Seller contact / Q&A go-live:** set `PHONE_CONTACT_MIN_RESERVE_EUR` on Render (without it no lot shows a phone number); set up Twilio for seller texts if wanted. Owner review of phone numbers on higher-reserve lots due 25 Nov 2026.
 1. **Cookie consent.** GA4 and the Meta Pixel load before consent (GDPR/ePrivacy). Needs a consent banner + Google Consent Mode v2. _In progress._

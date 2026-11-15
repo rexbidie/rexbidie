@@ -28,6 +28,9 @@ import {
 
 import { auth, optionalAuth } from "../middlewares/auth.middleware.js";
 import { deleteMyAccount, deletionCheck } from "../controllers/accountDeletion.controller.js";
+import mongoose from "mongoose";
+import User from "../models/user.model.js";
+import { buyerTermsCurrent, buyerTermsUpdate } from "../utils/buyerTerms.js";
 
 const userRouter = Router();
 
@@ -38,6 +41,31 @@ userRouter.post('/refresh-token', refreshAccessToken);
 userRouter.post('/logout', auth, logoutUser);
 userRouter.get('/me/deletion-check', auth, deletionCheck);
 userRouter.post('/me/delete', auth, deleteMyAccount);
+
+// Buyer Terms agreement before bidding (utils/buyerTerms.js)
+userRouter.get('/me/buyer-terms', auth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).select("buyerTerms.acceptedAt").lean();
+        res.json({ success: true, data: { current: buyerTermsCurrent(user), acceptedAt: user?.buyerTerms?.acceptedAt || null } });
+    } catch (error) {
+        console.error("Buyer terms status error:", error);
+        res.status(500).json({ success: false, message: "Couldn't check your Buyer Terms agreement" });
+    }
+});
+userRouter.post('/me/buyer-terms', auth, async (req, res) => {
+    try {
+        const auctionId = mongoose.isValidObjectId(req.body?.auctionId) ? req.body.auctionId : null;
+        const now = new Date();
+        await User.updateOne(
+            { _id: req.user._id },
+            buyerTermsUpdate({ now, auctionId, ip: req.ip, userAgent: req.get("user-agent") })
+        );
+        res.json({ success: true, data: { current: true, acceptedAt: now } });
+    } catch (error) {
+        console.error("Buyer terms accept error:", error);
+        res.status(500).json({ success: false, message: "Couldn't save your agreement. Please try again." });
+    }
+});
 userRouter.post('/forgot-password', forgotPassword);
 userRouter.post('/reset-password/:token', resetPassword);
 userRouter.get('/unsubscribe/:token', unsubscribeUser);

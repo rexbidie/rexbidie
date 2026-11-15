@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getServerNow } from "../utils/serverClock";
 
 const useAuctionCountdown = (auction) => {
   const [countdown, setCountdown] = useState({
@@ -19,7 +20,8 @@ const useAuctionCountdown = (auction) => {
     }
 
     const calculateTimeLeft = () => {
-      const now = new Date();
+      // Server-aligned time, so a phone with a wrong clock still shows the right time left.
+      const now = new Date(getServerNow());
       const startDate = new Date(auction.startDate);
       const endDate = new Date(auction.endDate);
 

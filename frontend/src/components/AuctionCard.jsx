@@ -1,4 +1,5 @@
 import { Gavel, Heart, MapPin, Eye, Users, Shield, Clock, Zap, File, Gauge, Settings, ShoppingCart, HandHelping, HandGrab, Star } from "lucide-react";
+import ReserveProgress from "./bidding/ReserveProgress";
 import { heroImg } from "../assets";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -310,6 +311,9 @@ function AuctionCard({ auction }) {
                                 )
                             }
                         </div>
+
+                        {/* Reserve progress, last 24 hours before closing */}
+                        <ReserveProgress auction={auction} className="-mt-2 mb-3" />
 
                         <div className="text-xs text-gray-500 text-center flex items-center justify-around">
                             {/* <div>

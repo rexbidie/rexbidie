@@ -20,6 +20,8 @@ import LiveBuyNowPanel from "../components/buyItNow/LiveBuyNowPanel";
 import { isNativeApp } from "../native/platform";
 import * as haptics from "../native/haptics";
 import { shareLink } from "../native/share";
+import QuickBid from "../components/bidding/QuickBid";
+import useBuyerTerms from "../hooks/useBuyerTerms";
 
 const YouTubeEmbed = lazy(() => import('../components/YouTubeEmbed'));
 const ImageLightBox = lazy(() => import('../components/ImageLightBox'));
@@ -48,6 +50,10 @@ function SingleAuction() {
     const [isBidModalOpen, setIsBidModalOpen] = useState(false);
     const formRef = useRef();
     const { user } = useAuth();
+    // Buyer Terms: ticked once per auction night, then one-tap bids.
+    const buyerTerms = useBuyerTerms(user);
+    const [confirmingBid, setConfirmingBid] = useState(false);
+    const bidInFlightRef = useRef(false);
     // Only a genuine 404 marks the page noindex; a temporary API error must not.
     const [notFound, setNotFound] = useState(false);
     useSeo(buildAuctionSeo(auction, { notFound }));
@@ -121,6 +127,45 @@ function SingleAuction() {
         setIsBidModalOpen(true);
     };
 
+    // One-tap bid (the Bid / − / + buttons). Asks for the Buyer Terms once per
+    // night, then places each bid straight away.
+    const requestBid = (value) => {
+        const bidValue = Number(value);
+        const symbol = userCurrency === 'GBP' ? '£' : '€';
+        const min = Math.ceil(Number(minBidAmount) || 0);
+        if (bidding) return;
+        if (!Number.isFinite(bidValue) || bidValue < min) {
+            toast.error(`Minimum bid is ${symbol}${min.toLocaleString('en-IE')}`);
+            return;
+        }
+        if (user && user._id?.toString() === auction?.seller?._id?.toString()) {
+            toast.error(`You can't bid on your own auction.`);
+            return;
+        }
+
+        gtag('event', 'bid_intent', {
+            listing_id: auction._id,
+            item_name: auction.title,
+            category: auction.categories?.[1] || auction.categories?.[0] || '',
+            bid_amount: bidValue,
+            currency: userCurrency,
+            auction_type: auction.auctionType,
+            bid_number: (auction.bidCount || 0) + 1,
+        });
+
+        setBidAmount(String(bidValue));
+        if (!user) {
+            setPendingAction({ type: 'bid', amount: String(bidValue) });
+            setIsAuthModalOpen(true);
+            return;
+        }
+        if (!buyerTerms.current) {
+            setIsBidModalOpen(true);
+            return;
+        }
+        submitBid(bidValue);
+    };
+
     const handleAuthSuccess = (authedUser) => {
         setIsAuthModalOpen(false);
 
@@ -155,9 +200,16 @@ function SingleAuction() {
         setIsPaymentModalOpen(true);
     };
 
-    const handleConfirmBid = (e) => {
-        handleBid(e);
+    const handleConfirmBid = async (e) => {
+        e?.preventDefault?.();
+        if (!buyerTerms.current) {
+            setConfirmingBid(true);
+            const ok = await buyerTerms.accept(auction?._id);
+            setConfirmingBid(false);
+            if (!ok) return;
+        }
         setIsBidModalOpen(false);
+        submitBid(parseFloat(bidAmount));
     };
 
     const handleCloseBidModal = () => {
@@ -478,10 +530,13 @@ function SingleAuction() {
 
     // ============= BID HANDLER =============
     const handleBid = async (e) => {
-        e.preventDefault();
+        e?.preventDefault?.();
+        return submitBid(parseFloat(bidAmount));
+    };
 
+    const submitBid = async (bidValue) => {
         if (!user) {
-            setPendingAction({ type: 'bid', amount: bidAmount });
+            setPendingAction({ type: 'bid', amount: String(bidValue) });
             setIsAuthModalOpen(true);
             return;
         }
@@ -501,12 +556,15 @@ function SingleAuction() {
             minBidInUserCurrency = auction.convertedCurrentPrice + (auction.convertedBidIncrement || 0);
         }
 
-        const bidValue = parseFloat(bidAmount);
-        if (!bidAmount || bidValue < minBidInUserCurrency) {
+        if (!Number.isFinite(bidValue) || bidValue < minBidInUserCurrency) {
             const currencySymbol = userCurrency === 'GBP' ? '£' : '€';
             toast.error(`Minimum bid is ${currencySymbol}${minBidInUserCurrency.toFixed(0)}`);
             return;
         }
+
+        // Ignore a second tap while the first bid is still on its way.
+        if (bidInFlightRef.current) return;
+        bidInFlightRef.current = true;
 
         try {
             setBidding(true);
@@ -555,13 +613,20 @@ function SingleAuction() {
                 error?.response?.data?.errorCode === 'PAYMENT_METHOD_INVALID' ||
                 error?.response?.data?.errorCode === 'STRIPE_CUSTOMER_INVALID'
             ) {
-                setPendingAction({ type: 'bid', amount: bidAmount });
+                setPendingAction({ type: 'bid', amount: String(bidValue) });
                 setIsPaymentModalOpen(true);
+            } else if (/just changed|at least/i.test(error?.response?.data?.message || '')) {
+                // Someone else bid at the same moment: show the new price so the
+                // bidder can tap again without refreshing.
+                setBidAmount('');
+                refreshAuction();
+                toast.error('Someone else bid first. The price has gone up: tap again to bid at the new amount.', { duration: 5000 });
             } else {
                 toast.error(error?.response?.data?.message || 'Failed to place bid');
             }
         } finally {
             setBidding(false);
+            bidInFlightRef.current = false;
         }
     };
 
@@ -813,6 +878,10 @@ function SingleAuction() {
 
     const youtubeVideoId = getYouTubeId(auction?.videoLink);
     const minBidAmount = auction?.bidCount > 0 ? auction?.convertedCurrentPrice + auction?.convertedBidIncrement : auction?.convertedCurrentPrice;
+    // Whole-unit amounts for the one-tap bid buttons (rounded up so a converted
+    // price never lands just under the minimum).
+    const quickMin = Math.ceil(Number(minBidAmount) || 0);
+    const quickStep = Math.max(1, Math.ceil(Number(auction?.convertedBidIncrement) || 1));
 
     // Check if Buy Now is available - remove timer check for buy_now
     const isBuyNowAvailable = auction?.convertedBuyNowPrice &&
@@ -952,6 +1021,10 @@ function SingleAuction() {
                     setBidAmount={setBidAmount}
                     minBidAmount={minBidAmount}
                     onPlaceBid={handleMobilePlaceBid}
+                    quickMin={quickMin}
+                    quickStep={quickStep}
+                    onQuickBid={requestBid}
+                    isLeading={userBidStatus === 'highest'}
                     bidding={bidding}
                     countdown={countdown}
                     onProxyBidClick={handleOpenProxyBidModal}
@@ -1373,30 +1446,16 @@ function SingleAuction() {
                                     {/* Bid Form for standard/reserve - only show for timed auctions */}
                                     {(auction.auctionType === 'standard' || auction.auctionType === 'reserve') && (
                                         <form ref={formRef} onSubmit={handleBid} className="flex flex-col gap-4">
-                                            <input
-                                                type="number"
-                                                value={bidAmount}
-                                                autoFocus
-                                                onChange={(e) => setBidAmount(e.target.value)}
-                                                className="py-3 px-5 w-full border-2 border-gray-400 rounded-lg focus:outline-2 focus:outline-primary"
-                                                placeholder={`Enter bid amount (${userCurrency === 'GBP' ? '£' : '€'}${auction.bidCount > 0 ? minBidAmount?.toFixed(0) : auction.convertedStartPrice?.toFixed(0)} or higher)`}
-                                                min={minBidAmount?.toFixed(0)}
+                                            <QuickBid
+                                                minBid={quickMin}
+                                                step={quickStep}
+                                                symbol={userCurrency === 'GBP' ? '£' : '€'}
+                                                amount={bidAmount}
+                                                setAmount={setBidAmount}
+                                                onBid={requestBid}
+                                                bidding={bidding}
+                                                isLeading={userBidStatus === 'highest'}
                                             />
-                                            <button
-                                                type="button"
-                                                disabled={bidding}
-                                                onClick={() => handleOpenBidModal(bidAmount)}
-                                                className="flex items-center justify-center gap-2 w-full bg-[#D19F3E] text-black py-3 px-6 cursor-pointer rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#db9a18] transition-colors"
-                                            >
-                                                {bidding ? (
-                                                    <Loader size={16} className="animate-spin-slow" />
-                                                ) : (
-                                                    <>
-                                                        <Gavel />
-                                                        <span>Place Bid</span>
-                                                    </>
-                                                )}
-                                            </button>
                                             <p className="text-xs text-gray-500 text-center">
                                                 + buyer fee: {buyerFeeShort}.{" "}
                                                 <Link to="/payment-refund-policy#buyer-fee" className="underline">Fees &amp; payment</Link>
@@ -1656,6 +1715,8 @@ function SingleAuction() {
                 onClose={handleCloseBidModal}
                 onConfirm={handleConfirmBid}
                 bidAmount={bidAmount}
+                needsTerms={!buyerTerms.current}
+                confirming={confirmingBid}
                 auction={auction}
                 ref={formRef}
             />
