@@ -5,7 +5,7 @@ the site (owner, developer, or Claude in a new session) can pick up where things
 were left. **This repository is public: never put passwords, API keys, personal
 data or private business details in this file.**
 
-_Last updated: 13 November 2026_
+_Last updated: 14 November 2026_
 
 ---
 
@@ -220,8 +220,28 @@ After deploying, in Events Manager create Custom Conversions for `PlaceBid` and 
 
 ---
 
+## 3f. Accept the highest bid after the reserve isn't met (Nov 2026)
+
+When a reserve lot ends below its reserve, the seller's "Your listing has ended" email now shows the **highest bid** and the number of bids, plus an **Accept €X and sell** button. The button opens `/accept-bid/<token>` (`frontend/src/pages/AcceptBid.jsx`), which shows the price and what the seller receives; pressing *Accept* sells the lot to the top bidder straight away.
+
+Rules (`backend/src/utils/acceptTopBid.js`):
+- Reserve lots in `reserve_not_met`, not already sold, within **24 hours** of the auction ending (`ACCEPT_HOURS`).
+- Price = the top bid when the auction ended (`currentPrice` / `currentBidder`), never a proxy maximum.
+- **Binding sale.** Normal won / sold / admin emails, Sale record, payment request and payout follow, exactly as for a winning bid. Pending or countered offers are closed. A live Last Chance window is closed (claimed atomically, so a Last Chance purchase and an acceptance can't both go through).
+- Refused if the top bidder's account is inactive or deleted.
+- The top bidder's "reserve not met" email says the seller has 24 hours to accept their bid.
+- The link is signed (`ACCEPT_BID_TOKEN_SECRET`, falling back to `ACCESS_TOKEN_SECRET`), carries the price, and expires with the window. Opening the link only reads; the sale happens on the button (email scanners open links).
+- API: `GET` / `POST /api/v1/accept-top-bid/:token` (`backend/src/routes/acceptTopBid.route.js`, `backend/src/services/acceptTopBidService.js`). Data: `auction.acceptedTopBid` (owner/admin only).
+
+**Render settings.** Off until `ACCEPT_TOP_BID_BIDS_FROM` is set to the date and time the updated Buyer Terms / Payment Policy went live (e.g. `2026-11-16T09:00:00Z`): only top bids placed on or after it can be accepted, because earlier bidders agreed to terms that said no sale without the reserve. `ACCEPT_TOP_BID=off` turns it off everywhere.
+
+**Legal wording changed** (Buyer Terms section 1; Payment, Fees & Refund Policy section 10). Terms & Conditions clause 13 doesn't mention it yet: solicitor to review together with the clause 15 fee update.
+
+---
+
 ## 4. Open to-do list (most important first)
 
+0a. **Accept highest bid go-live:** solicitor check of the new Buyer Terms / Payment Policy wording, then set `ACCEPT_TOP_BID_BIDS_FROM` on Render to the time they went live (section 3f).
 0. **Seller contact / Q&A go-live:** set `PHONE_CONTACT_MIN_RESERVE_EUR` on Render (without it no lot shows a phone number); set up Twilio for seller texts if wanted. Owner review of phone numbers on higher-reserve lots due 25 Nov 2026.
 1. **Cookie consent.** GA4 and the Meta Pixel load before consent (GDPR/ePrivacy). Needs a consent banner + Google Consent Mode v2. _In progress._
 2. **Terms & Conditions clause 15** still says buyer fee 3% capped at €200 and seller fee 3%. Needs updating (solicitor) to match section 2.

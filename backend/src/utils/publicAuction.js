@@ -18,6 +18,7 @@ const idOf = (v) => (v && typeof v === "object" ? v._id ?? v.id : v)?.toString?.
 
 // Fields only the seller and admins may see.
 const OWNER_ONLY_FIELDS = [
+  "acceptedTopBid",
   "reservePrice",
   "convertedReservePrice",
   "featuredPremiumAmount",

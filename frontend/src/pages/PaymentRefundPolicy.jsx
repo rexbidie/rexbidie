@@ -13,7 +13,7 @@ import {
     MIN_NO_RESERVE_START_EUR,
 } from "../utils/fees";
 
-const LAST_UPDATED = "11 November 2026";
+const LAST_UPDATED = "14 November 2026";
 const EXAMPLES = [1000, 2000, 5000, 10000, 20000];
 const euro = (n) => `€${Number(n).toLocaleString("en-IE", { maximumFractionDigits: 2 })}`;
 
@@ -242,8 +242,9 @@ const PaymentRefundPolicy = () => {
                     <Section id="reserve-offers" title="10. Reserve not met and offers">
                         <List
                             items={[
-                                "If an auction ends without meeting its reserve, there is no sale and nothing is charged, unless the seller later accepts your offer.",
-                                "An accepted offer is a binding sale, and this policy applies to it in the same way as a winning bid.",
+                                "If an auction ends without meeting its reserve, the seller may accept the highest bid within 24 hours of the auction ending. If they do, the highest bidder has bought the item at their highest bid.",
+                                "Otherwise there is no sale and nothing is charged, unless the seller later accepts your offer or you buy the item on Last Chance.",
+                                "An accepted highest bid or accepted offer is a binding sale, and this policy applies to it in the same way as a winning bid.",
                             ]}
                         />
                     </Section>

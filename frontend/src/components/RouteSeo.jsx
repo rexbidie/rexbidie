@@ -83,7 +83,7 @@ const NOINDEX_PAGES = {
     "/reset-password": "Reset Password | RexBid",
     "/rate-us": "Leave a Review | RexBid",
 };
-const NOINDEX_PREFIXES = ["/admin", "/seller", "/bidder", "/broker", "/company", "/checkout/", "/unsubscribe/"];
+const NOINDEX_PREFIXES = ["/admin", "/seller", "/bidder", "/broker", "/company", "/checkout/", "/unsubscribe/", "/accept-bid/"];
 
 // Pages that manage their own tags once their data loads.
 const SELF_MANAGED_PREFIXES = ["/auction/", "/catalogue/", "/seller-reviews/"];

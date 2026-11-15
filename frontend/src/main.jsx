@@ -31,6 +31,7 @@ const SellerReviews = lazy(() => import('./pages/SellerReviews'));
 const Sell = lazy(() => import('./pages/Sell'));
 const DeliveryPartnerQuote = lazy(() => import('./pages/DeliveryPartnerQuote'));
 const Unsubscribe = lazy(() => import('./pages/Unsubscribe'));
+const AcceptBid = lazy(() => import('./pages/AcceptBid'));
 const SingleCatalogue = lazy(() => import('./pages/SingleCatalogue'));
 const Catalogues = lazy(() => import('./pages/Catalogues'));
 const BuyItNow = lazy(() => import('./pages/BuyItNow'));
@@ -187,6 +188,8 @@ createRoot(document.getElementById('root')).render(
                         <Route path='/delivery-partner-quote' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><DeliveryPartnerQuote /></Suspense>} />
 
                         <Route path='/unsubscribe/:token' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Unsubscribe /></Suspense>} />
+
+                        <Route path='/accept-bid/:token' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><AcceptBid /></Suspense>} />
 
                         <Route path='/catalogue/:id' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><SingleCatalogue /></Suspense>} />
 

@@ -1770,10 +1770,41 @@ const sendAuctionEndedSellerEmail = async (listing) => {
             }
         }
 
+        // Reserve not met: show the top bid and let the seller accept it (binding sale).
+        let acceptTopBid = '';
+        let topBidRow = '';
+        if (listing?.status === 'reserve_not_met') {
+            try {
+                const { acceptTopBidState, signAcceptToken, ACCEPT_HOURS } = await import('./acceptTopBid.js');
+                const top = Number(listing?.currentPrice) || 0;
+                const bidCurrency = listing?.baseCurrency || 'EUR';
+                if (top > 0 && (listing?.bidCount || listing?.bids?.length)) {
+                    topBidRow = createSummaryRow('Highest Bid:', formatCurrency(top, bidCurrency));
+                }
+                const state = acceptTopBidState(listing);
+                const token = state.allowed ? signAcceptToken(listing) : null;
+                if (token) {
+                    const deadline = state.deadline.toLocaleString('en-IE', {
+                        timeZone: 'Europe/Dublin', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit',
+                    });
+                    acceptTopBid = `
+                        <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid ${BRAND_COLORS.success};">
+                            <p style="margin: 0 0 8px 0;"><strong>Want to sell for ${formatCurrency(state.amount, bidCurrency)}?</strong></p>
+                            <p style="margin: 0;">The highest bid was <strong>${formatCurrency(state.amount, bidCurrency)}</strong>. You can accept it and sell to the top bidder now. You have ${ACCEPT_HOURS} hours, until <strong>${deadline}</strong>.</p>
+                            <p style="margin: 8px 0 0 0;">Accepting is a binding sale: we'll send the buyer their payment details straight away.</p>
+                            ${createButton(`Accept ${formatCurrency(state.amount, bidCurrency)} and sell`, `${FRONTEND_URL}/accept-bid/${token}`, 'primary')}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error('Accept-top-bid link failed:', err.message);
+            }
+        }
+
         const content = `
             <h2 style="text-align: center;">${isSold ? 'Item Sold' : 'Listing Ended'}</h2>
             <p style="text-align: center;">${statusMessage}</p>
-            
+
             ${createInfoCard(`
                 <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: ${BRAND_COLORS.secondary};">${listing?.title}</p>
                 
@@ -1790,10 +1821,14 @@ const sendAuctionEndedSellerEmail = async (listing) => {
                 
                 ${createSummaryRow('Final Status:', listing?.status?.toUpperCase() || 'N/A')}
                 ${createSummaryRow('Original Price:', formatCurrency(listing?.buyNowPrice || listing?.startPrice || 0, listing?.seller?.currency))}
+                ${topBidRow}
+                ${listing?.status === 'reserve_not_met' ? createSummaryRow('Bids:', (listing?.bidCount || listing?.bids?.length || 0).toLocaleString()) : ''}
                 ${createSummaryRow('Total Offers:', (listing?.offers?.length || 0).toLocaleString())}
                 ${createSummaryRow('Total Views:', (listing?.views || 0).toLocaleString())}
             `)}
-            
+
+            ${acceptTopBid}
+
             ${isSold && listing?.winner ? `
                 <div style="background: ${BRAND_COLORS.grayBg}; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid ${BRAND_COLORS.success};">
                     <p style="margin: 0 0 8px 0;"><strong>Congratulations! Your item has been sold.</strong></p>
@@ -3372,6 +3407,28 @@ const auctionReserveNotMetEmail = async (
             : "recently";
         const offerUrl = `${FRONTEND_URL}/bidder/bids`;
 
+        // Top bidder: the seller can still accept their bid (binding) for a while.
+        let sellerMayAccept = '';
+        if (bidderRank === 1) {
+            try {
+                const { acceptTopBidState, ACCEPT_HOURS } = await import('./acceptTopBid.js');
+                const state = acceptTopBidState(listing);
+                if (state.allowed) {
+                    sellerMayAccept = `
+      <div style="background:#FFFBEB;border-left:4px solid ${BRAND_COLORS.warning};padding:14px 16px;border-radius:6px;margin:20px 0;">
+        <strong>The seller can still accept your bid</strong>
+        <p style="margin:6px 0 0 0;color:${BRAND_COLORS.textLight};">
+          For the next ${ACCEPT_HOURS} hours the seller can accept your top bid of
+          <strong>${formatCurrency(state.amount, currency)}</strong>. If they do, the sale is binding
+          and we'll email you the payment details.
+        </p>
+      </div>`;
+                }
+            } catch (err) {
+                console.error('Accept-top-bid note failed:', err.message);
+            }
+        }
+
         const rankBadge =
             bidderRank === 1
                 ? `<span style="display:inline-block;background:#FEF3C7;color:#92400E;font-weight:600;padding:4px 10px;border-radius:999px;font-size:12px;">🥇 Highest Bidder</span>`
@@ -3395,6 +3452,8 @@ const auctionReserveNotMetEmail = async (
         ${createSummaryRow("Reserve Price:", `${currency} ${reservePrice.toLocaleString()}`)}
         ${createSummaryRow("Difference:", `${currency} ${gap.toLocaleString()}`)}
       `)}
+
+      ${sellerMayAccept}
 
       <div style="background:#EFF6FF;border-left:4px solid #3B82F6;padding:14px 16px;border-radius:6px;margin:20px 0;">
         <strong style="color:#1E40AF;">💬 You can still make an offer</strong>
