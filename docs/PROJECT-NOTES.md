@@ -253,6 +253,16 @@ Rules (`backend/src/utils/acceptTopBid.js`):
 
 ---
 
+## 3h. Admin → Sale Night Times (Nov 2026)
+
+`/admin/sale-times` (`frontend/src/pages/admin/SaleTimes.jsx`, API `GET/POST /api/v1/admin/sale-times`, `backend/src/controllers/saleTimes.controller.js`). Re-times the lots closing on a sale day, e.g. lots approved before the closing-slot menu existed.
+- Load a day; change times in the table or paste a plan (one line per lot with the listing ID and HH:MM, other text ignored); **Check changes** lists exactly what moves; **Apply** asks to confirm.
+- Irish time. Several lots may close at the same minute (unlike the approve pop-up's slot menu).
+- All-or-nothing check: unknown IDs, bad times, duplicates, lots already closed, lots closing within 30 minutes and new times less than 30 minutes away are refused, and nothing changes until every line is valid. A lot that changed between the check and Apply (e.g. a late bid extended it) is skipped and reported.
+- Moves only the closing time and its closing job; "ending soon" emails follow the new time automatically (15-minute sweep).
+
+---
+
 ## 4. Open to-do list (most important first)
 
 0b. **Rolling sale night** (later lots move back when one is extended) and a **Live sale** screen that follows the closing lot: planned after the 17 Nov sale; rehearse on a test sale night first.
