@@ -24,6 +24,7 @@ const SellerAgreement = lazy(() => import('./pages/SellerAgreement'));
 const BuyerAgreement = lazy(() => import('./pages/BuyerAgreement'));
 const BuyerTerms = lazy(() => import('./pages/BuyerTerms'));
 const SingleAuction = lazy(() => import('./pages/SingleAuction'));
+const Featured = lazy(() => import('./pages/Featured'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const FAQs = lazy(() => import('./pages/FAQs'));
 const Checkout = lazy(() => import('./pages/Checkout'));
@@ -157,6 +158,7 @@ createRoot(document.getElementById('root')).render(
                         <Route path='/register' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Register /></Suspense>} />
 
                         <Route path='/auctions' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Auctions /></Suspense>} />
+                        <Route path='/featured' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Featured /></Suspense>} />
 
                         <Route path='/checkout/:auctionId' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Checkout /></Suspense>} />
 

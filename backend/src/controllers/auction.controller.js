@@ -4173,10 +4173,16 @@ export const getFeaturedListings = async (req, res) => {
     };
 
     const now = new Date();
+    // Featured: flagged by RexBid, or paid for by the seller (when listing or
+    // later from My Listings), so every seller who paid gets shown.
     const filter = {
-      isFeatured: true,
       status: "active",
       endDate: { $gt: now },
+      $or: [
+        { isFeatured: true },
+        { featuredRequested: true, "extrasPayment.status": "completed" },
+        { promotions: { $elemMatch: { featured: true, status: "completed" } } },
+      ],
     };
 
     if (category && category !== "all") {
@@ -4204,6 +4210,20 @@ export const getFeaturedListings = async (req, res) => {
     // Sort using converted prices
     let sortedListings = [...listingsWithConverted];
     switch (sortBy) {
+      case "rotate": {
+        // Fair rotation: a fresh random order per visit. The browser sends a
+        // seed so "Load more" pages continue the same order without repeats.
+        const seed = String(req.query.seed || Math.random());
+        let h = 2166136261;
+        for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+        const rand = () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+        sortedListings.sort((a, b) => String(a._id).localeCompare(String(b._id)));
+        for (let i = sortedListings.length - 1; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [sortedListings[i], sortedListings[j]] = [sortedListings[j], sortedListings[i]];
+        }
+        break;
+      }
       case "highestBid":
         sortedListings.sort((a, b) => b.convertedCurrentPrice - a.convertedCurrentPrice);
         break;

@@ -8,15 +8,21 @@ import Container from "./Container";
 import { useAuth } from "../contexts/AuthContext";
 import { useLiveAuctionTicks } from "../hooks/useLiveAuctionTicks";
 
-const FeaturedListings = () => {
+// Home page section (default) or the full Featured page (page). Featured
+// listings are shown in a fair rotation: a new random order each visit, so
+// every seller who paid for Featured gets seen.
+const FeaturedListings = ({ page = false }) => {
     const navigate = useNavigate();
     const [listings, setListings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState("grid"); // grid or list
-    const [sortBy, setSortBy] = useState("highestBid");
-    const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1, limit: 8 });
+    const [sortBy, setSortBy] = useState("rotate");
+    const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 1, limit: page ? 24 : 8 });
+    // Same random order across "Load more" pages for this visit.
+    const [seed] = useState(() => Math.random().toString(36).slice(2));
     const [category, setCategory] = useState("all");
-    const [visible, setVisible] = useState(false);
+    // The full page shows straight away; the home section fades in on scroll.
+    const [visible, setVisible] = useState(page);
 
     const [liveAuctions, setLiveAuctions] = useState([]);
     useEffect(() => { setLiveAuctions(listings); }, [listings]);
@@ -34,6 +40,7 @@ const FeaturedListings = () => {
             params.append("limit", pagination.limit.toString());
             params.append("page", page.toString());
             params.append("sortBy", sortBy);
+            if (sortBy === "rotate") params.append("seed", seed);
             params.append("currency", userCurrency);
             if (category !== "all") params.append("category", category);
 
@@ -82,7 +89,8 @@ const FeaturedListings = () => {
                     observer.disconnect();
                 }
             },
-            { threshold: 0.1 }
+            // Any part on screen: a long list can never be 10% visible on a phone.
+            { threshold: 0 }
         );
 
         observer.observe(element);
@@ -97,7 +105,7 @@ const FeaturedListings = () => {
     };
 
     const handleViewAll = () => {
-        navigate("/auctions?featured=true");
+        navigate("/featured");
     };
 
     if (loading && liveAuctions.length === 0) {
@@ -159,22 +167,38 @@ const FeaturedListings = () => {
                             </h2> */}
                             <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#A17B35]">Featured</p>
-                    <h2 className="text-[1.6rem] font-bold leading-tight text-[#072342] md:text-[2rem]">Featured Machinery</h2>
+                    {page
+                        ? <h1 className="text-[1.8rem] font-bold leading-tight text-[#072342] md:text-[2.4rem]">Featured Machinery</h1>
+                        : <h2 className="text-[1.6rem] font-bold leading-tight text-[#072342] md:text-[2rem]">Featured Machinery</h2>}
+                    {page && <p className="mt-2 text-gray-600">{pagination.total} featured lot{pagination.total === 1 ? "" : "s"} live now. The order changes on every visit.</p>}
                 </div>
                             {/* <p className="text-gray-500 mt-1">
                                 Premium machinery and vehicles handpicked by RexBid
                             </p> */}
                         </div>
+                        {page && (
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                                Sort
+                                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="min-h-[44px] rounded-lg border border-gray-300 bg-white px-3">
+                                    <option value="rotate">Mixed (changes each visit)</option>
+                                    <option value="endingSoon">Ending soonest</option>
+                                    <option value="highestBid">Highest bid</option>
+                                    <option value="newest">Newest</option>
+                                </select>
+                            </label>
+                        )}
                     </div>
                 </div>
 
                 {/* Listings grid/list */}
                 {viewMode === "grid" ? (
-                    <section className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-x-7 sm:gap-y-10 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
+                    <section className={page
+                        ? "grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-x-7 sm:gap-y-10 lg:grid-cols-3 xl:grid-cols-4"
+                        : "-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-x-7 sm:gap-y-10 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4"}>
                         {liveAuctions.map((listing, index) => (
                             <div
                                 key={listing._id}
-                                className={`w-[90%] shrink-0 snap-start sm:w-auto transition-all duration-1000 ease-out ${visible
+                                className={`${page ? "" : "w-[90%] shrink-0 snap-start sm:w-auto "}transition-all duration-1000 ease-out ${visible
                                     ? "translate-y-0 opacity-100"
                                     : "translate-y-10 opacity-0"
                                     }`}
@@ -207,30 +231,30 @@ const FeaturedListings = () => {
 
                 {/* Load More / View All buttons */}
                 <div
-                    className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 mt-10 transition-all delay-[900ms] duration-1000 ease-out ${visible
+                    className={`flex flex-row items-center justify-center gap-3 mt-8 md:mt-10 transition-all delay-[900ms] duration-1000 ease-out ${visible
                         ? "translate-y-0 opacity-100"
                         : "translate-y-6 opacity-0"
                         }`}
                 >
-                    {pagination.page < pagination.pages && (
+                    {page ? (
+                        pagination.page < pagination.pages && (
+                            <button
+                                onClick={handleLoadMore}
+                                disabled={loading}
+                                className="inline-flex min-h-[44px] items-center justify-center rounded-lg border-2 border-[#D19F3E] px-6 py-2.5 text-base font-semibold text-[#A17B35] transition hover:bg-[#D19F3E] hover:text-white disabled:opacity-50"
+                            >
+                                {loading ? "Loading…" : "Load more"}
+                            </button>
+                        )
+                    ) : (
                         <button
-                            onClick={handleLoadMore}
-                            disabled={loading}
-                            className="px-8 py-4 border-2 border-[#D19F3E] text-[#A17B35] text-lg font-semibold rounded-xl hover:bg-[#D19F3E] hover:text-white transition-all disabled:opacity-50"
+                            onClick={handleViewAll}
+                            className="group inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] px-6 py-2.5 text-base font-semibold text-white transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#F5B51B] focus:ring-offset-2"
                         >
-                            {loading ? "Loading..." : "Load More"}
+                            <span>See all featured{pagination.total > liveAuctions.length ? ` (${pagination.total})` : ""}</span>
+                            <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
                         </button>
                     )}
-                    <button
-                        onClick={handleViewAll}
-                        className="group flex w-full items-center justify-center gap-2 bg-gradient-to-r from-[#D19F3E] to-[#E8B86B] text-white text-lg font-semibold rounded-xl hover:bg-gradient-to-r hover:from-[#D19F3E]/90 hover:to-[#E8B86B]/90 px-10 py-4 sm:w-auto transition-all duration-300 hover:bg-[#e4a000] hover:shadow-[0_0_35px_rgba(197,157,85,0.25)] focus:outline-none focus:ring-2 focus:ring-[#F5B51B] focus:ring-offset-2"
-                    >
-                        <span>See All Machinery</span>
-                        <ArrowRight
-                            size={22}
-                            className="transition-transform duration-300 group-hover:translate-x-1"
-                        />
-                    </button>
                 </div>
             </Container>
         </section>
