@@ -682,7 +682,7 @@ auctionSchema.methods.placeBid = async function (
       ? this.currentPrice
       : this.currentPrice + this.bidIncrement;
   if (amount < minBid) {
-    throw new Error(`Bid must be at least $${minBid}`);
+    throw new Error(`Bid must be at least ${this.baseCurrency === "GBP" ? "£" : "€"}${Number(minBid).toLocaleString("en-IE")}`);
   }
 
   if (this.liveBuyNow?.status === "processing") {

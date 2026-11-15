@@ -120,3 +120,10 @@ html.is-app .fixed.bottom-0.mb-20 {
 html.is-app .fixed.bottom-20 {
   bottom: calc(5rem + var(--sab));
 }
+
+/* Fixed bid bar on mobile listing pages (MobileBidStickyBar): keep page content
+   clear of it and hide the scroll-to-top button, which would sit on the + button. */
+@media (max-width: 1023px) {
+  body.has-bid-bar { padding-bottom: 7rem; }
+  body.has-bid-bar .scroll-top-btn { display: none; }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLiveAuctionTicks } from "../hooks/useLiveAuctionTicks";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Calendar, BookMarked } from "lucide-react";
 import { Container, LoadingSpinner, AuctionCard } from "../components";
@@ -43,6 +44,8 @@ function SingleCatalogue() {
 
     const [catalogue, setCatalogue] = useState(null);
     const [auctions, setAuctions] = useState([]);
+    // Live prices, bid counts and reserve progress while the page is open.
+    useLiveAuctionTicks(setAuctions);
     const [pagination, setPagination] = useState(null);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);

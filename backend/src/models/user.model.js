@@ -174,6 +174,21 @@ const userSchema = new Schema(
       type: Number,
     },
 
+    // Buyer Terms agreed before bidding (utils/buyerTerms.js). Asked once per
+    // auction night; every agreement is kept as a record.
+    buyerTerms: {
+      acceptedAt: Date,
+      history: [
+        {
+          _id: false,
+          at: Date,
+          auction: { type: Schema.Types.ObjectId, ref: "Auction" },
+          ip: String,
+          userAgent: String,
+        },
+      ],
+    },
+
     // Payment status
     isPaymentVerified: {
       type: Boolean,

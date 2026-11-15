@@ -1,4 +1,5 @@
 import Auction from "../models/auction.model.js";
+import { paymentRecentlyVerified, rememberPaymentVerified } from "../utils/paymentCheckCache.js";
 import User from "../models/user.model.js";
 import {
   uploadImageToCloudinary,
@@ -2278,7 +2279,9 @@ export const placeBid = async (req, res) => {
       });
     }
 
-    // Verify the payment method is still valid with Stripe
+    // Verify the card and Stripe customer with Stripe. A successful check is
+    // remembered for 10 minutes so quick bids on sale night aren't slowed down.
+    if (!paymentRecentlyVerified(bidder)) {
     try {
       const paymentMethod = await stripe.paymentMethods.retrieve(bidder.paymentMethodId);
 
@@ -2307,6 +2310,8 @@ export const placeBid = async (req, res) => {
         redirectTo: `/${bidder?.userType || 'bidder'}/billing`,
         errorCode: 'STRIPE_CUSTOMER_INVALID'
       });
+    }
+    rememberPaymentVerified(bidder);
     }
 
     // Validate account status
