@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import useAuctionCountdown from "../hooks/useAuctionCountDown";
 import { useWatchlist } from "../hooks/useWatchlist";
+import { liveBinDisplayPrice } from "../utils/liveBuyNow";
 
 function AuctionListItem({ auction }) {
     const navigate = useNavigate();
@@ -295,6 +296,18 @@ function AuctionListItem({ auction }) {
                         {getButtonIcon()}
                         {getButtonText()}
                     </button>
+                    {auction?.liveBuyNow?.available && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/auction/${auction._id}?buy=1`);
+                            }}
+                            className="px-4 py-2 sm:px-3 sm:py-1.5 border-2 border-[#D19F3E] bg-[#FFF7EA] text-[#072342] text-sm sm:text-xs font-semibold rounded flex-1 sm:flex-none flex items-center justify-center gap-1"
+                        >
+                            <ShoppingCart size={14} />
+                            Buy It Now {(auction.displayCurrency || 'EUR') === 'GBP' ? '£' : '€'}{liveBinDisplayPrice(auction)?.toLocaleString('en-IE', { maximumFractionDigits: 0 })}
+                        </button>
+                    )}
                     <button
                         onClick={handleWatchlist}
                         className={`p-2 sm:p-1.5 rounded transition-colors ${

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, ShoppingCart, Zap } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -16,6 +16,15 @@ const LiveBuyNowPanel = ({ auction, onPurchased }) => {
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
     const live = auction?.liveBuyNow;
+    const panelRef = useRef(null);
+
+    // Opened from a listing card's Buy It Now button (?buy=1): bring the panel into view.
+    useEffect(() => {
+        if (!live?.available || !panelRef.current) return;
+        if (new URLSearchParams(window.location.search).get("buy") === "1" && panelRef.current.offsetParent) {
+            panelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }, [live?.available]);
 
     if (!live || auction.status !== "active") return null;
 
@@ -44,7 +53,7 @@ const LiveBuyNowPanel = ({ auction, onPurchased }) => {
     };
 
     return (
-        <div className="my-4 rounded-lg border-2 border-[#edcd1f] bg-white p-4">
+        <div ref={panelRef} id="buy-it-now" className="my-4 rounded-lg border-2 border-[#edcd1f] bg-white p-4 scroll-mt-24">
             <p className="text-xs uppercase tracking-wide font-semibold text-gray-600">Buy It Now · skip the auction</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">
                 {money(price, displayCurrency)}

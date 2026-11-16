@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import useAuctionCountdown from "../hooks/useAuctionCountDown";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useAuth } from "../contexts/AuthContext";
+import { liveBinDisplayPrice } from "../utils/liveBuyNow";
 
 function AuctionCard({ auction }) {
     const navigate = useNavigate();
@@ -402,6 +403,18 @@ function AuctionCard({ auction }) {
                 </button>
 
             </div>
+
+            {/* Buy It Now during the auction (backend utils/liveBuyNow.js) */}
+            {auction?.liveBuyNow?.available && (
+                <Link
+                    to={`/auction/${auction._id}?buy=1`}
+                    onClick={handleAuctionClick}
+                    className="mt-2 flex min-h-[44px] items-center justify-center gap-2 rounded-lg border-2 border-[#D19F3E] bg-[#FFF7EA] px-4 py-2 font-semibold text-[#072342] transition hover:bg-[#FDF2DD]"
+                >
+                    <ShoppingCart size={18} />
+                    Buy It Now {userCurrency === 'GBP' ? '£' : '€'}{liveBinDisplayPrice(auction)?.toLocaleString('en-IE', { maximumFractionDigits: 0 })}
+                </Link>
+            )}
 
             {/* Watchlist Count */}
             {/* {auction.watchlistCount > 0 && (
