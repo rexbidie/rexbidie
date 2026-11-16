@@ -1636,7 +1636,7 @@ const CreateListingForm = ({ Container, Header, Sidebar, basePath, defaultUserTy
                                                         {errors.liveBuyNowPrice && <p className="text-red-500 text-sm mt-1">{errors.liveBuyNowPrice.message}</p>}
                                                         <Hint>
                                                             Lets a buyer buy your machine outright while the auction is live. It must be at least 15% above your reserve.
-                                                            It closes once bidding reaches 90% of your reserve, or {CLOSE_CUTOFF_HOURS} hours before the auction ends, so it never cuts strong bidding short.
+                                                            It closes once bidding gets close to your reserve, or {CLOSE_CUTOFF_HOURS} hours before the auction ends, so it never cuts strong bidding short.
                                                             You can add or change it later from My Listings; once bidding starts it can only be lowered or removed.
                                                         </Hint>
                                                     </div>

@@ -72,7 +72,7 @@ export const BuyItNowPriceModal = ({ auction, onClose, onChanged }) => {
             <p className="mt-3 text-sm text-gray-700">
                 Lets a buyer buy outright while the auction is live. It must be at least 15% above your reserve
                 ({sym}{Number(auction.reservePrice).toLocaleString("en-IE")} → {sym}{min.toLocaleString("en-IE")} or more).
-                It closes once bidding reaches 90% of your reserve, or {CLOSE_CUTOFF_HOURS} hours before the end.
+                It closes once bidding gets close to your reserve, or {CLOSE_CUTOFF_HOURS} hours before the end.
                 {hasBids ? " Bidding has started, so you can add it, lower it or remove it, but not raise it." : ""}
             </p>
             <PriceInput id="bin-price" label="Buy It Now price" sym={sym} value={value} onChange={setValue} placeholder={String(min)} />
