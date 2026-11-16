@@ -49,6 +49,7 @@ export const useAuctions = () => {
                 page: page.toString(),
                 limit: limit.toString(),
                 currency: `${userCurrency}`,
+                view: 'card', // compact listing data for cards
                 ...Object.fromEntries(
                     Object.entries(clean).filter(([key]) => key !== 'categories')
                 )
@@ -104,6 +105,7 @@ export const useAuctions = () => {
                 page: page.toString(),
                 limit: "21",
                 currency: `${userCurrency}`,
+                view: 'card', // compact listing data for cards
                 ...Object.fromEntries(
                     Object.entries(clean).filter(([key]) => key !== 'categories')
                 )

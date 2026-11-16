@@ -5,7 +5,7 @@ import {
     deleteFromCloudinary,
 } from "../utils/cloudinary.js";
 import { getCachedRates } from "../routes/currency.route.js";
-import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
+import { sanitizeAuctionForViewer, toCardView } from "../utils/publicAuction.js";
 
 // -------------------- helpers --------------------
 
@@ -209,7 +209,7 @@ export const getCatalogueAuctions = async (req, res) => {
             success: true,
             data: {
                 catalogue,
-                auctions: auctionsWithConverted,
+                auctions: req.query.view === "card" ? auctionsWithConverted.map(toCardView) : auctionsWithConverted,
                 pagination: {
                     currentPage: parseInt(page),
                     totalPages: Math.ceil(total / limit) || 1,

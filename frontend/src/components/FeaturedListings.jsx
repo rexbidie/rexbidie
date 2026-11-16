@@ -42,6 +42,7 @@ const FeaturedListings = ({ page = false }) => {
             params.append("sortBy", sortBy);
             if (sortBy === "rotate") params.append("seed", seed);
             params.append("currency", userCurrency);
+            params.append("view", "card");
             if (category !== "all") params.append("category", category);
 
             const { data } = await axiosInstance.get(`/api/v1/auctions/featured?${params}`);

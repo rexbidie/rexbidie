@@ -29,7 +29,7 @@ import AuctionDate from "../models/auctionDate.model.js";
 import { broadcastAuctionChange, broadcastAuctionRemoved } from "../services/realtimeService.js";
 import { getManualPaymentFlags } from "../utils/manualPayment.js";
 import { processProxyBids } from "../services/proxyBidService.js";
-import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
+import { sanitizeAuctionForViewer, toCardView } from "../utils/publicAuction.js";
 import { minimumPriceError } from "../utils/listingRules.js";
 import { calculateListingExtras } from "../utils/listingExtras.js";
 import { livePriceError, liveBuyNowState } from "../utils/liveBuyNow.js";
@@ -839,7 +839,7 @@ export const getAuctions = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        auctions: auctionsWithConverted,
+        auctions: req.query.view === "card" ? auctionsWithConverted.map(toCardView) : auctionsWithConverted,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / limit),
@@ -4266,7 +4266,7 @@ export const getFeaturedListings = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        listings: paginatedListings.map((l) => sanitizeAuctionForViewer(l, req.user)),
+        listings: paginatedListings.map((l) => sanitizeAuctionForViewer(l, req.user)).map((l) => (req.query.view === "card" ? toCardView(l) : l)),
         pagination: {
           total,
           page: parseInt(page),

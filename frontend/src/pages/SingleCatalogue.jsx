@@ -99,6 +99,7 @@ function SingleCatalogue() {
                     {
                         params: {
                             currency: userCurrency,
+                            view: 'card',
                             page,
                             limit: PAGE_SIZE,
                             start,

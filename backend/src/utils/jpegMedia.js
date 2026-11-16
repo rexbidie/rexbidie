@@ -10,6 +10,8 @@
 // that aren't meant to be public.
 
 import sharp from "sharp";
+import { HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { r2Client, BUCKET_NAME } from "./r2Client.js";
 
 export const MEDIA_ORIGIN = (process.env.R2_PUBLIC_URL || "https://media.rexbid.ie").replace(/\/+$/, "");
 export const PUBLIC_BACKEND = (process.env.PUBLIC_BACKEND_URL || "https://rexbid-backend.onrender.com").replace(/\/+$/, "");
@@ -77,10 +79,44 @@ const oneAtATime = (fn) => {
     return run;
 };
 
+// Saved copies in R2 (jpeg/<folder>/<name>.jpg on media.rexbid.ie), so each
+// photo is converted and sent by this server once; after that requests are
+// redirected to R2 and don't use Render bandwidth. Instagram-cropped copies
+// are rare and served directly (Instagram's import may not follow redirects).
+const storedKeyFor = (key) => `jpeg/${key.replace(/\.[a-z0-9]+$/i, "")}.jpg`;
+const stored = new Set();
+const isStored = async (k) => {
+    if (stored.has(k)) return true;
+    try {
+        await r2Client.send(new HeadObjectCommand({ Bucket: BUCKET_NAME, Key: k }));
+        stored.add(k);
+        return true;
+    } catch {
+        return false;
+    }
+};
+const store = async (k, body) => {
+    try {
+        await r2Client.send(new PutObjectCommand({
+            Bucket: BUCKET_NAME, Key: k, Body: body, ContentType: "image/jpeg",
+            CacheControl: "public, max-age=31536000, immutable",
+        }));
+        stored.add(k);
+    } catch (err) {
+        console.error("[jpegMedia] could not save copy to R2:", err?.message);
+    }
+};
+
 export async function jpegHandler(req, res) {
     const key = req.params[0];
     const instagram = req.query.fit === "instagram";
     if (!isAllowedKey(key)) return res.status(404).send("Not found");
+
+    const r2Key = storedKeyFor(key);
+    if (!instagram && (await isStored(r2Key))) {
+        res.set("Cache-Control", "public, max-age=86400");
+        return res.redirect(302, `${MEDIA_ORIGIN}/${r2Key}`);
+    }
 
     const cacheKey = `${key}|${instagram ? "ig" : ""}`;
     let body = cache.get(cacheKey);
@@ -107,6 +143,7 @@ export async function jpegHandler(req, res) {
             return res.status(502).send("Image unavailable");
         }
     }
+    if (!instagram && !stored.has(r2Key)) store(r2Key, body); // next time: from R2
     res.set("Content-Type", "image/jpeg");
     // Photo file names are unique, so the JPEG never changes.
     res.set("Cache-Control", "public, max-age=604800, immutable");
