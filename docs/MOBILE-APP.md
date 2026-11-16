@@ -229,6 +229,6 @@ Phones with auto-update install it within a day or two. Make sure new website fe
 working in the app: links that open new tabs open inside the app automatically, and admin pages are
 never included in the app.
 
-Releases so far: 1.0.0 (code 1) first release, Nov 2026 · 1.1.0 (code 2) new dashboards, one-tap
+Releases so far: 1.0.0 (code 1) first release, Nov 2026 · 1.1.0 (code 3; code 2 skipped) new dashboards, one-tap
 bidding, accept highest bid, pay before submit, Featured page, Buy It Now on cards, Last Chance,
-lighter images.
+lighter images, navy and gold app icon.
