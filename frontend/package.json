@@ -11,7 +11,7 @@
     "app:build": "vite build --mode app && cap sync",
     "app:ios": "npm run app:build && cap open ios",
     "app:android": "npm run app:build && cap open android",
-    "app:assets": "capacitor-assets generate --iconBackgroundColor '#072342' --iconBackgroundColorDark '#072342' --splashBackgroundColor '#072342' --splashBackgroundColorDark '#072342' --ios --android"
+    "app:assets": "capacitor-assets generate --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#ffffff' --splashBackgroundColor '#072342' --splashBackgroundColorDark '#072342' --ios --android"
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.6.0",
