@@ -160,3 +160,15 @@ export const sanitizeAuctionForViewer = (auction, viewer = null) => {
 
 export const sanitizeAuctionsForViewer = (list, viewer = null) =>
   Array.isArray(list) ? list.map((a) => sanitizeAuctionForViewer(a, viewer)) : list;
+
+/**
+ * Compact listing for cards (listing pages, catalogues, Featured) when the
+ * request asks for ?view=card: the first photo only (plus photoCount) and no
+ * bid history, offers or payment details. Cuts the data sent per page.
+ */
+export const toCardView = (auction) => {
+  if (!auction) return auction;
+  const { bids, offers, proxyBids, participants, extrasPayment, promotions, pendingEdit, notifications, ...rest } = auction;
+  const photos = Array.isArray(auction.photos) ? auction.photos : [];
+  return { ...rest, photos: photos.slice(0, 1), photoCount: photos.length };
+};
