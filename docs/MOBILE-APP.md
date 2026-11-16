@@ -204,3 +204,31 @@ These can't be fully tested in the cloud build environment:
 - Seller payout setup via Stripe opens and returns, and the status updates.
 - Opening a payment request PDF from Documents.
 - Android back button.
+
+---
+
+## 7. Releasing updates (website vs app)
+
+| What changed | Website | App |
+|---|---|---|
+| **Backend** (emails, payments, bidding rules, prices, listings data) | Live when Render deploys | **Live at the same moment**: the app uses the same backend |
+| **Listings, catalogues, content in the database** | Instant | Instant |
+| **Frontend** (pages, buttons, layout, new screens) | Live when Render deploys | **Only after a new app version is built and uploaded** to Google Play (and the App Store), then installed by users. The app carries its own copy of the pages. |
+
+To release an app update after website changes are merged:
+1. `cd frontend && git pull`
+2. Raise `versionCode` by 1 and set `versionName` in `android/app/build.gradle`
+   (e.g. 2 → 3, "1.1.0" → "1.2.0").
+3. `npm run app:build`, then `cd android && ./gradlew bundleRelease`
+   (needs `android/keystore.properties`, `android/app/google-services.json`, `.env.app.local`).
+4. Play Console → Production (or Internal testing first) → Create new release → upload
+   `app/build/outputs/bundle/release/app-release.aab` → roll out. Google usually reviews updates in hours to a day.
+5. iPhone: same web build, then Xcode → Archive → upload (once the Apple account is ready).
+
+Phones with auto-update install it within a day or two. Make sure new website features keep
+working in the app: links that open new tabs open inside the app automatically, and admin pages are
+never included in the app.
+
+Releases so far: 1.0.0 (code 1) first release, Nov 2026 · 1.1.0 (code 2) new dashboards, one-tap
+bidding, accept highest bid, pay before submit, Featured page, Buy It Now on cards, Last Chance,
+lighter images.

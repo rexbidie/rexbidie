@@ -52,7 +52,16 @@ export const initNativeApp = async () => {
             const a = e.target?.closest?.('a[href]');
             if (!a || e.defaultPrevented) return;
             const href = a.getAttribute('href');
-            if (!href || href.startsWith('#') || !isOutside(href)) return;
+            if (!href || href.startsWith('#')) return;
+            // "Open in new tab" links to our own pages: the app has no tabs, so open them here.
+            if (!isOutside(href)) {
+                if (a.getAttribute('target') === '_blank' && !a.hasAttribute('download')) {
+                    const u = new URL(href, window.location.href);
+                    e.preventDefault();
+                    navigateInApp(`${u.pathname}${u.search}${u.hash}`);
+                }
+                return;
+            }
             e.preventDefault();
             const inside = toAppPath(href);
             // Absolute links to our own site (e.g. https://rexbid.ie/faqs) stay in the app,
@@ -64,6 +73,12 @@ export const initNativeApp = async () => {
     );
     const nativeOpen = window.open.bind(window);
     window.open = (url, target, features) => {
+        // Our own pages open inside the app (there are no tabs).
+        if (url && !isOutside(url) && /^(\/|https?:)/.test(String(url))) {
+            const u = new URL(url, window.location.href);
+            navigateInApp(`${u.pathname}${u.search}${u.hash}`);
+            return null;
+        }
         if (url && isOutside(url)) {
             const inside = toAppPath(url);
             if (inside && !/\.pdf($|\?)/i.test(inside)) navigateInApp(inside);
