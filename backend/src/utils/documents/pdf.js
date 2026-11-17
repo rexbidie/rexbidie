@@ -164,7 +164,8 @@ export const renderPaymentRequestPdf = (s) =>
             b.bic ? ["BIC", b.bic] : null,
             b.sortCode ? ["Sort code", b.sortCode] : null,
             b.accountNumber ? ["Account number", b.accountNumber] : null,
-            ["Currency", s.currency],
+            ["Currency", b.payCurrency || s.currency],
+            b.payAmount ? ["Amount to transfer", money(b.payAmount, b.payCurrency)] : null,
             ["Payment reference", b.reference || s.reference],
             ["Payment due", longDate(s.dueDate)],
         ].filter(Boolean);
@@ -172,6 +173,14 @@ export const renderPaymentRequestPdf = (s) =>
             doc.font("Helvetica").fontSize(10).fillColor(NAVY).text(k, LEFT + 14, y, { width: 150 });
             doc.font(k === "IBAN" || k === "Account number" ? "Helvetica-Bold" : "Helvetica").text(v, LEFT + 180, y, { width: WIDTH - 180 });
             y += 19;
+        }
+        if (b.payAmount && b.rate) {
+            doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(
+                `Bank transfers are made in euro. ${money(s.total, s.currency)} converted at 1 ${s.currency} = ${Number(b.rate).toFixed(4)} ${b.payCurrency}.` +
+                    (s.cardPayUrl ? ` Card payments are charged in ${s.currency}.` : ""),
+                LEFT + 14, y + 4, { width: WIDTH - 28 },
+            );
+            y = doc.y;
         }
         y += 22;
 
@@ -183,7 +192,7 @@ export const renderPaymentRequestPdf = (s) =>
 
         doc.font("Helvetica").fontSize(9).fillColor(MUTED);
         doc.text(
-            "Payments are handled by Stripe. The account above is unique to you. Use it to do a bank transfer for the total payable amount and quote the payment reference." +
+            (b.payAmount ? "Payments are handled by Stripe. The account above is unique to you. Transfer the amount shown above in euro and quote the payment reference." : "Payments are handled by Stripe. The account above is unique to you. Use it to do a bank transfer for the total payable amount and quote the payment reference.") +
                 (s.cardPayUrl ? " Please pay once only, either by bank transfer or by card." : ""),
             LEFT, y, { width: WIDTH * 0.75 },
         );

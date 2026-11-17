@@ -115,6 +115,11 @@ const saleSchema = new Schema(
                 accountHolderName: String,
                 country: String,
                 reference: String,
+                // What the buyer transfers, when it differs from the sale
+                // currency: sterling sales are paid by bank transfer in euro.
+                payCurrency: String,
+                payAmount: Number,
+                rate: Number,
             },
             amountReceived: { type: Number, default: 0 },
             // Set when bank transfer is switched on for the buyer in Stripe.

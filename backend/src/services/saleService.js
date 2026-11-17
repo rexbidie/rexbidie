@@ -5,6 +5,7 @@ import User from "../models/user.model.js";
 import { regionForItem, regionForUser } from "../utils/region.js";
 import { calculateVat } from "../utils/vat.js";
 import { renderPaymentRequestPdf } from "../utils/documents/pdf.js";
+import { getCachedRates } from "../routes/currency.route.js";
 import { isManualPaymentRequired } from "../utils/manualPayment.js";
 import { addWorkingDays, COLLECTION_WORKING_DAYS } from "../utils/workingDays.js";
 import {
@@ -280,10 +281,23 @@ export const setVatDecision = async (sale, { treatment, rate, note, itemRegion, 
 
 // ─── Stripe bank transfer ──────────────────────────────────
 
-const bankTransferOptions = (currency) =>
-    currency === "GBP"
-        ? { type: "gb_bank_transfer" }
-        : { type: "eu_bank_transfer", eu_bank_transfer: { country: "IE" } };
+// RexBid's Stripe account is Irish, so Stripe only gives buyers euro (SEPA)
+// bank details. Sterling sales are paid by bank transfer in euro, converted at
+// the day's rate when the payment request is made. Card payments stay in £.
+export const BANK_CURRENCY = "EUR";
+const bankTransferOptions = () => ({ type: "eu_bank_transfer", eu_bank_transfer: { country: "IE" } });
+
+/** Amount the buyer transfers: the sale total, or its euro value for £ sales. */
+export const bankTransferAmount = (sale, rates = getCachedRates()) => {
+    if (sale.currency === BANK_CURRENCY) return { currency: BANK_CURRENCY, amount: sale.total, rate: null };
+    const rate = Number(rates?.[sale.currency]?.rates?.[BANK_CURRENCY]);
+    if (!(rate > 0)) {
+        throw Object.assign(new Error("Exchange rate not available yet. Try again in a minute."), { status: 503 });
+    }
+    // Rounded up to the cent so the transfer always covers the £ total.
+    const amount = Math.ceil(Number((sale.total * rate * 100).toFixed(6))) / 100;
+    return { currency: BANK_CURRENCY, amount, rate };
+};
 
 const fromFinancialAddresses = (addresses = [], type, reference) => {
     const iban = addresses.find((f) => f.type === "iban")?.iban;
@@ -322,9 +336,9 @@ export const ensureBuyerIban = async (sale) => {
     try {
         const customerId = sale.stripe?.customerId || (await ensureStripeCustomer(sale));
         const fi = await stripe.customers.createFundingInstructions(customerId, {
-            currency: sale.currency.toLowerCase(),
+            currency: BANK_CURRENCY.toLowerCase(),
             funding_type: "bank_transfer",
-            bank_transfer: bankTransferOptions(sale.currency),
+            bank_transfer: bankTransferOptions(),
         });
         const details = instructionsFromFunding(fi);
         if (!details) throw new Error("Stripe returned no bank details");
@@ -377,16 +391,26 @@ const ensureStripeCustomer = async (sale) => {
  * Makes sure the sale has an open Stripe bank-transfer PaymentIntent for the
  * current total, and copies the buyer's unique IBAN and reference onto it.
  */
-export const ensureBankTransferIntent = async (sale) => {
-    const amount = Math.round(sale.total * 100);
+export const ensureBankTransferIntent = async (sale, { rates } = {}) => {
     const customerId = sale.stripe?.customerId || (await ensureStripeCustomer(sale));
+    const withPayAmount = (details, pay) =>
+        details && pay.currency !== sale.currency
+            ? { ...details, payCurrency: pay.currency, payAmount: pay.amount, rate: pay.rate }
+            : details;
 
     if (sale.stripe?.paymentIntentId) {
         const existing = await stripe.paymentIntents.retrieve(sale.stripe.paymentIntentId);
         if (existing.status === "succeeded") return existing;
-        if (existing.amount === amount && existing.status === "requires_action") {
+        // Same total as before: keep the open request (and, for £ sales, its rate).
+        const sameTotal = existing.metadata?.saleTotal
+            ? existing.metadata.saleTotal === String(sale.total) && existing.currency === BANK_CURRENCY.toLowerCase()
+            : existing.amount === Math.round(sale.total * 100) && existing.currency === sale.currency.toLowerCase();
+        if (sameTotal && existing.status === "requires_action") {
+            const rate = existing.metadata?.rate ? Number(existing.metadata.rate) : null;
             sale.set("stripe.customerId", customerId);
-            sale.set("stripe.bankTransfer", instructionsFromPaymentIntent(existing));
+            sale.set("stripe.bankTransfer", withPayAmount(instructionsFromPaymentIntent(existing), {
+                currency: existing.currency.toUpperCase(), amount: existing.amount / 100, rate,
+            }));
             return existing;
         }
         // Total changed (e.g. VAT decision) – replace the old request.
@@ -400,17 +424,19 @@ export const ensureBankTransferIntent = async (sale) => {
         }
     }
 
+    const pay = bankTransferAmount(sale, rates);
+    const amount = Math.round(pay.amount * 100);
     const pi = await stripe.paymentIntents.create(
         {
             amount,
-            currency: sale.currency.toLowerCase(),
+            currency: pay.currency.toLowerCase(),
             customer: customerId,
             payment_method_types: ["customer_balance"],
             payment_method_data: { type: "customer_balance" },
             payment_method_options: {
                 customer_balance: {
                     funding_type: "bank_transfer",
-                    bank_transfer: bankTransferOptions(sale.currency),
+                    bank_transfer: bankTransferOptions(),
                 },
             },
             confirm: true,
@@ -420,15 +446,18 @@ export const ensureBankTransferIntent = async (sale) => {
                 saleId: String(sale._id),
                 auctionId: String(sale.auction),
                 reference: sale.reference,
+                saleTotal: String(sale.total),
+                saleCurrency: sale.currency,
+                ...(pay.rate ? { rate: String(pay.rate) } : {}),
             },
         },
-        { idempotencyKey: `sale-${sale._id}-${amount}-${sale.documents.length}` },
+        { idempotencyKey: `sale-${sale._id}-${pay.currency}-${amount}-${sale.documents.length}` },
     );
 
     sale.set("stripe.customerId", customerId);
     sale.set("stripe.paymentIntentId", pi.id);
     sale.set("stripe.paymentIntentAmount", amount);
-    sale.set("stripe.bankTransfer", instructionsFromPaymentIntent(pi));
+    sale.set("stripe.bankTransfer", withPayAmount(instructionsFromPaymentIntent(pi), pay));
     return pi;
 };
 
@@ -472,6 +501,10 @@ export const paymentRequestSnapshot = (sale, issueDate = new Date()) => ({
             sortCode: sale.stripe.bankTransfer.sortCode,
             accountNumber: sale.stripe.bankTransfer.accountNumber,
             reference: sale.stripe.bankTransfer.reference,
+            // Set for £ sales: the euro amount to transfer and the rate used.
+            payCurrency: sale.stripe.bankTransfer.payCurrency,
+            payAmount: sale.stripe.bankTransfer.payAmount,
+            rate: sale.stripe.bankTransfer.rate,
         }
         : null,
 });
@@ -591,7 +624,7 @@ export const recordPartialFunding = async (pi) => {
     if (!sale) return null;
     const remaining = pi.next_action?.display_bank_transfer_instructions?.amount_remaining;
     if (remaining !== undefined) sale.set("stripe.amountReceived", (pi.amount - remaining) / 100);
-    sale.notes.push({ text: `Part payment received in Stripe: ${sale.stripe.amountReceived} ${sale.currency} of ${sale.total}` });
+    sale.notes.push({ text: `Part payment received in Stripe: ${sale.stripe.amountReceived} ${pi.currency.toUpperCase()} of ${pi.amount / 100}` });
     await sale.save();
     return sale;
 };
@@ -607,13 +640,19 @@ export const recordPayment = async (pi) => {
 
     sale.status = "paid";
     const received = (pi.amount_received || pi.amount) / 100;
+    // A £ sale paid in euro: the request was for the full £ total.
+    const converted = pi.currency !== sale.currency.toLowerCase();
     sale.set("stripe.amountReceived", received);
     sale.set("payment.paidAt", new Date());
     sale.set("payment.method", "bank_transfer");
-    sale.set("payment.amount", received);
+    sale.set("payment.amount", converted ? sale.total : received);
     sale.set("payment.transactionId", pi.id);
     sale.set("collection.dueBy", addWorkingDays(new Date(), COLLECTION_WORKING_DAYS));
-    sale.notes.push({ text: `Payment of ${sale.payment.amount} ${sale.currency} received via Stripe (${pi.id})` });
+    sale.notes.push({
+        text: converted
+            ? `Payment of ${received} ${pi.currency.toUpperCase()} (for ${sale.total} ${sale.currency}${pi.metadata?.rate ? ` at ${pi.metadata.rate}` : ""}) received via Stripe (${pi.id})`
+            : `Payment of ${sale.payment.amount} ${sale.currency} received via Stripe (${pi.id})`,
+    });
     await sale.save();
     await autoIssueReceipt(sale);
 
