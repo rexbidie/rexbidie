@@ -12,9 +12,12 @@ import useCountryStates from '../hooks/useCountryStates';
 import { getGaClientId, trackEvent } from '../utils/ga.js';
 import { trackMetaRegistration } from '../utils/metaPixel.js';
 import { isNativeApp } from '../native/platform';
+import EmailCodeForm from './auth/EmailCodeForm';
 
 const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const [activeTab, setActiveTab] = useState('login');
+    // Email still to confirm with the 6-digit code (after sign-up, or a login before confirming).
+    const [verifyEmailFor, setVerifyEmailFor] = useState(null);
     const { setUser } = useAuth();
     const { useCountries } = useCountryStates();
     const [countries, setCountries] = useState([]);
@@ -86,6 +89,12 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             }
         } catch (err) {
             const msg = err?.response?.data?.message || '';
+
+            if (err?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+                toast(msg, { duration: 8000 });
+                setVerifyEmailFor({ email: err.response.data.email, isNew: false });
+                return;
+            }
 
             // Account doesn't exist → switch to Register tab, prefill email
             if (/no user found|user.*not.*found|not.*exist/i.test(msg)) {
@@ -165,6 +174,11 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             );
 
             const body = res.data;
+            if (body.requiresEmailVerification) {
+                toast.success(body.message);
+                setVerifyEmailFor({ email: body.data.email, isNew: true });
+                return;
+            }
             const { user, accessToken, refreshToken } = body.data;
             localStorage.setItem('accessToken', accessToken);
             localStorage.setItem('refreshToken', refreshToken);
@@ -242,7 +256,30 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
 
                 {/* Body */}
                 <div className="p-6 overflow-y-auto">
-                    {activeTab === 'login' && (
+                    {verifyEmailFor && (
+                        <div className="py-2">
+                            <h3 className="text-lg font-semibold text-[#072342] mb-3">Confirm your email</h3>
+                            <EmailCodeForm
+                                compact
+                                email={verifyEmailFor.email}
+                                onVerified={(data) => {
+                                    const { user, accessToken, refreshToken } = data.data;
+                                    localStorage.setItem('accessToken', accessToken);
+                                    localStorage.setItem('refreshToken', refreshToken);
+                                    localStorage.setItem('user', JSON.stringify(user));
+                                    setUser(user);
+                                    if (verifyEmailFor.isNew) {
+                                        trackMetaRegistration(user.userType, user.currency);
+                                        if (typeof window.gtag === 'function') window.gtag('event', 'sign_up', { user_type: user.userType, method: 'email' });
+                                    }
+                                    toast.success(data.message || 'Email confirmed');
+                                    setVerifyEmailFor(null);
+                                    onAuthSuccess(user);
+                                }}
+                            />
+                        </div>
+                    )}
+                    {!verifyEmailFor && activeTab === 'login' && (
                         <form onSubmit={handleLoginSubmit(onLogin)} className="space-y-4">
                             <Field label="Email" icon={<User size={18} />}>
                                 <input
@@ -277,7 +314,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                         </form>
                     )}
 
-                    {activeTab === 'register' && (
+                    {!verifyEmailFor && activeTab === 'register' && (
                         <form onSubmit={handleRegSubmit(onRegister)} className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <Input label="Email *" placeholder="Enter your email" icon={<Mail size={18} />} error={regErrors.email?.message}

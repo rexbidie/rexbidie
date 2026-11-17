@@ -645,6 +645,28 @@ const newUserRegistrationEmail = async (adminEmail, user) => {
     }
 };
 
+/** Sign-up: the 6-digit code to confirm the email address. */
+const verificationCodeEmail = async (user, code, minutes = 30) => {
+    const name = String(user?.firstName || user?.companyName || user?.username || "there").replace(/[<>&"]/g, "");
+    const content = `
+            <h2 style="text-align: center;">Confirm Your Email</h2>
+            <p>Hi ${name},</p>
+            <p>Enter this code on ${BRAND_NAME} to finish creating your account:</p>
+            <div style="text-align: center; margin: 28px 0;">
+                <span style="display: inline-block; font-size: 34px; letter-spacing: 10px; font-weight: bold; color: ${BRAND_COLORS.secondary}; background: ${BRAND_COLORS.grayBg}; padding: 16px 24px; border-radius: 10px; border: 1px solid ${BRAND_COLORS.grayBorder};">${code}</span>
+            </div>
+            <p style="text-align: center;">The code expires in ${minutes} minutes.</p>
+            <p style="font-size: 13px; color: ${BRAND_COLORS.textLight};">If you didn't create a ${BRAND_NAME} account, you can ignore this email.</p>
+        `;
+    const info = await transporter.sendMail({
+        from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: `${code} is your ${BRAND_NAME} code`,
+        html: baseTemplate(content, 'Confirm Your Email'),
+    });
+    return !!info;
+};
+
 // 5. Reset password email
 const resetPasswordEmail = async (email, url) => {
     try {
@@ -4734,6 +4756,7 @@ const accountDeletedEmail = async ({ email, name, userType }, { reason } = {}) =
 };
 
 export {
+    verificationCodeEmail,
     accountDeletedEmail,
     listingEditedAdminEmail,
     listingEditDecisionEmail,

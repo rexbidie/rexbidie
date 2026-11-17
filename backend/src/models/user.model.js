@@ -308,6 +308,14 @@ const userSchema = new Schema(
       type: Boolean,
       default: false, //changed
     },
+    // Email verification at sign-up (services/emailVerificationService.js).
+    // Only accounts created after it was introduced must verify.
+    emailVerificationRequired: { type: Boolean, default: false },
+    emailVerifiedAt: { type: Date, default: null },
+    emailVerificationCode: { type: String, select: false },
+    emailVerificationExpires: { type: Date },
+    emailVerificationAttempts: { type: Number, default: 0 },
+    emailVerificationSentAt: { type: Date },
     // Set when the user deleted their account (it is anonymised, not removed).
     deletedAt: { type: Date, default: null },
     deletionReason: { type: String, trim: true },
