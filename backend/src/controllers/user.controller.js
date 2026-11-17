@@ -1,5 +1,5 @@
 import { checkEmail } from "../utils/emailCheck.js";
-import { confirmVerificationCode, needsEmailVerification, resendWaitSeconds, sendVerificationCode } from "../services/emailVerificationService.js";
+import { confirmVerificationCode, emailVerificationEnabled, needsEmailVerification, resendWaitSeconds, sendVerificationCode } from "../services/emailVerificationService.js";
 import User from "../models/user.model.js";
 import { StripeService } from "../services/stripeService.js";
 import jwt from "jsonwebtoken";
@@ -183,8 +183,9 @@ export const registerUser = async (req, res) => {
       phone,
       image,
       isVerified: true, //changed
-      // Must confirm the email address with a code before using the account.
-      emailVerificationRequired: true,
+      // Must confirm the email address with a code before using the account
+      // (only while EMAIL_VERIFICATION=on).
+      emailVerificationRequired: emailVerificationEnabled(),
       // identificationDocument: identificationDocumentUrl,
       // identificationDocumentPublicId,
       // identificationStatus: identificationDocumentUrl ? 'pending' : undefined,
@@ -205,6 +206,13 @@ export const registerUser = async (req, res) => {
         success: false,
         message: "User registration failed",
       });
+    }
+
+    // Codes switched off: sign straight in, as before.
+    if (!user.emailVerificationRequired) {
+      await generateTokensAndRespond(user, req, res, "Registration successful");
+      welcomeEmail(user).catch((err) => console.error("failed to send welcome email:", err));
+      return;
     }
 
     // Not signed in yet: the email address is confirmed with a code first
