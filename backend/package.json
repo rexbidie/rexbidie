@@ -26,6 +26,7 @@
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "file-type": "^22.0.2",
+    "heic-convert": "^2.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.2",
     "multer": "^2.0.2",

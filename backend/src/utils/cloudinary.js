@@ -208,6 +208,33 @@ const getContentTypeFromBuffer = async (buffer, originalName) => {
 // 3. Upload functions (all corrected)
 // ------------------------------
 
+// Upload an email campaign image as JPEG/PNG (not WebP, which Outlook
+// desktop and some other email apps can't show).
+export const uploadEmailImageToR2 = async (prepared, folder = 'email-campaigns', originalName = 'image') => {
+    const nameWithoutExt = path.parse(originalName).name;
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9-_]/g, '-') || 'image';
+    const key = `${folder}/${sanitizedName}-${Date.now()}.${prepared.ext}`;
+    await new Upload({
+        client: r2Client,
+        params: {
+            Bucket: BUCKET_NAME,
+            Key: key,
+            Body: prepared.buffer,
+            ContentType: prepared.contentType,
+            ContentDisposition: 'inline',
+            CacheControl: 'public, max-age=31536000, immutable',
+        },
+    }).done();
+    const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+    return {
+        secure_url: `${R2_PUBLIC_URL}/${encodedKey}`,
+        public_id: key,
+        width: prepared.width,
+        height: prepared.height,
+        bytes: prepared.bytes,
+    };
+};
+
 // Upload images (photos)
 export const uploadImageToR2 = async (buffer, folder = 'auction-photos', originalName = 'image.jpg') => {
     try {

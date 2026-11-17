@@ -4,8 +4,14 @@ import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import toast from "react-hot-toast";
 import axiosInstance from "../utils/axiosInstance";
+import { compressAuctionImage } from "../utils/compressImage";
+import { registerEmailButton, normaliseUrl } from "./emailButtonBlot";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+// Server accepts up to 25 MB; big phone photos are shrunk in the browser
+// first, so this only stops genuinely huge files.
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const isHeicFile = (file) =>
+    /^image\/hei[cf]/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || "");
 
 function RTE({
     name = "content",
@@ -14,8 +20,10 @@ function RTE({
     placeholder,
     rules,
     imageUploadUrl,
+    allowButtons = false,
 }) {
     const quillRef = useRef(null);
+    if (allowButtons) registerEmailButton();
 
     const imageHandler = useMemo(() => {
         if (!imageUploadUrl) return null;
@@ -23,23 +31,34 @@ function RTE({
         return () => {
             const input = document.createElement("input");
             input.setAttribute("type", "file");
-            input.setAttribute("accept", "image/*");
+            input.setAttribute("accept", "image/*,.heic,.heif");
             input.click();
 
             input.onchange = async () => {
-                const file = input.files?.[0];
-                if (!file) return;
+                const picked = input.files?.[0];
+                if (!picked) return;
 
-                if (file.size > MAX_IMAGE_BYTES) {
-                    toast.error("Image must be under 5MB");
+                if (picked.size > MAX_IMAGE_BYTES) {
+                    toast.error("Image must be under 25MB");
                     return;
                 }
 
-                const formData = new FormData();
-                formData.append("image", file);
-
                 const toastId = toast.loading("Uploading image...");
                 try {
+                    // iPhone photos (HEIC) go up as they are and the server
+                    // converts them; everything else is shrunk here first.
+                    let file = picked;
+                    if (isHeicFile(picked)) {
+                        if (!picked.type) {
+                            file = new File([picked], picked.name, { type: "image/heic" });
+                        }
+                    } else {
+                        file = await compressAuctionImage(picked);
+                    }
+
+                    const formData = new FormData();
+                    formData.append("image", file);
+
                     const { data } = await axiosInstance.post(
                         imageUploadUrl,
                         formData,
@@ -72,6 +91,30 @@ function RTE({
         };
     }, [imageUploadUrl]);
 
+    const buttonHandler = useMemo(() => {
+        if (!allowButtons) return null;
+        return () => {
+            const quill = quillRef.current?.getEditor();
+            if (!quill) return;
+            const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+            const selected = range.length ? quill.getText(range.index, range.length).trim() : "";
+
+            const text = window.prompt("Button text", selected || "View lots closing tonight");
+            if (text === null || !text.trim()) return;
+            const rawUrl = window.prompt("Button link", "https://rexbid.ie");
+            if (rawUrl === null) return;
+            const url = normaliseUrl(rawUrl);
+            if (!url) {
+                toast.error("Enter a full link, e.g. https://rexbid.ie");
+                return;
+            }
+
+            if (range.length) quill.deleteText(range.index, range.length, "user");
+            quill.insertEmbed(range.index, "emailButton", { text: text.trim(), url }, "user");
+            quill.setSelection(range.index + 1, 0, "user");
+        };
+    }, [allowButtons]);
+
     const modules = useMemo(
         () => ({
             toolbar: {
@@ -80,13 +123,16 @@ function RTE({
                     ["bold", "italic", "underline", "strike"],
                     [{ list: "ordered" }, { list: "bullet" }],
                     [{ align: [] }],
-                    ["link", "image"],
+                    allowButtons ? ["link", "image", "emailButton"] : ["link", "image"],
                     ["clean"],
                 ],
-                ...(imageHandler && { handlers: { image: imageHandler } }),
+                handlers: {
+                    ...(imageHandler && { image: imageHandler }),
+                    ...(buttonHandler && { emailButton: buttonHandler }),
+                },
             },
         }),
-        [imageHandler]
+        [imageHandler, buttonHandler, allowButtons]
     );
 
     return (

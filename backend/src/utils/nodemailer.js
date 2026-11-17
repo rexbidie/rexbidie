@@ -7,6 +7,7 @@ import Watchlist from "../models/watchlist.model.js";
 import { canEmailUser, canSendEmail } from "./emailPreferences.js";
 import { isManualPaymentRequired } from "../utils/manualPayment.js";
 import { notifyLater } from "./push.js";
+import { toEmailHtml } from "./emailHtml.js";
 
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -401,8 +402,9 @@ const sendMarketingCampaignEmail = async (
 ) => {
     const unsubscribeUrl = `${FRONTEND_URL}/unsubscribe/${unsubscribeToken}`;
 
-    // 1. Clamp images FIRST
-    const clampedBody = personalizedBody.replace(
+    // 1. Clamp images FIRST (after turning editor alignment and buttons
+    //    into HTML that email apps understand)
+    const clampedBody = toEmailHtml(personalizedBody).replace(
         /<img\b([^>]*?)>/gi,
         (match, attrs) => {
             const cleaned = attrs
