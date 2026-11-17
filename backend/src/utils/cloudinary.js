@@ -154,6 +154,26 @@ import { r2Client, BUCKET_NAME } from "./r2Client.js";
 // NEW: import file-type to detect MIME from buffer
 import { fileTypeFromBuffer } from 'file-type';
 import { processImageBuffer, processThumbnailBuffer } from './imageProcessor.js';
+import { Worker } from "worker_threads";
+import { isHeic } from "./emailImage.js";
+
+// HEIC conversions run one at a time, each in its own short-lived worker, so
+// the decoder's memory is freed afterwards (it keeps ~150 MB otherwise).
+let heicQueue = Promise.resolve();
+const convertInWorker = (buffer) => new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./heicWorker.js", import.meta.url), { workerData: { buffer } });
+    worker.once("message", (msg) => (msg.ok ? resolve(Buffer.from(msg.jpeg)) : reject(new Error(msg.error))));
+    worker.once("error", reject);
+    worker.once("exit", (code) => { if (code !== 0) reject(new Error(`HEIC conversion stopped (${code})`)); });
+});
+
+/** HEIC/HEIF (iPhone photos) to JPEG; other images are returned unchanged. */
+export const heicToJpeg = async (buffer, originalName = "") => {
+    if (!(await isHeic(buffer, "", originalName))) return buffer;
+    const run = heicQueue.then(() => convertInWorker(buffer), () => convertInWorker(buffer));
+    heicQueue = run.catch(() => {});
+    return run;
+};
 
 // Get custom domain from environment variables
 const R2_PUBLIC_URL =
@@ -238,6 +258,9 @@ export const uploadEmailImageToR2 = async (prepared, folder = 'email-campaigns',
 // Upload images (photos)
 export const uploadImageToR2 = async (buffer, folder = 'auction-photos', originalName = 'image.jpg') => {
     try {
+        // iPhone photos are often HEIC, which sharp can't read: convert to JPEG first.
+        buffer = await heicToJpeg(buffer, originalName);
+
         // Process the main image once
         const main = await processImageBuffer(buffer, {
             maxWidth: 1600,
