@@ -20,6 +20,7 @@ import axiosInstance from "../../utils/axiosInstance";
 import { useAuth } from "../../contexts/AuthContext";
 import PreferencesPanel from "../../components/PreferencesPanel";
 import DeleteAccountPanel from "../../components/DeleteAccountPanel";
+import LogoutButton from "../../components/LogoutButton";
 
 // Default preferences
 const defaultPreferences = {
@@ -683,6 +684,13 @@ function Profile() {
                                             onChangePassword={handlePasswordChange}
                                             saving={saving}
                                         />
+                                        <div className="mt-8 rounded-lg border border-gray-200 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-secondary">Log out</h3>
+                                                <p className="text-sm text-gray-600">Sign out of RexBid on this device.</p>
+                                            </div>
+                                            <LogoutButton />
+                                        </div>
                                         <DeleteAccountPanel />
                                     </>
                                 )}

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Monitor } from 'lucide-react';
 import { openExternal } from '../native/files';
+import LogoutButton from '../components/LogoutButton';
 
 /** Shown in the app for /admin pages: the admin dashboard is website-only. */
 function AdminOnWebsite() {
@@ -19,6 +20,10 @@ function AdminOnWebsite() {
                 >
                     Open rexbid.ie
                 </button>
+                <LogoutButton className="mt-3 w-full py-3" />
+                <p className="text-sm text-gray-500 mt-4">
+                    To bid or sell in the app, log out and sign in with a bidder or seller account.
+                </p>
                 <Link to="/" className="block mt-3 py-2 text-secondary font-medium">
                     Back to home
                 </Link>

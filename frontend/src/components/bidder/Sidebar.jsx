@@ -87,7 +87,7 @@ function Sidebar() {
 
             {/* Sidebar */}
             <aside className={`
-                fixed md:relative w-64 bg-gradient-to-b from-[#072342] to-[#0a2a4a] text-white h-[100dvh] md:h-auto md:min-h-screen overflow-hidden z-50 p-4 flex flex-col
+                fixed md:relative w-64 bg-gradient-to-b from-[#072342] to-[#0a2a4a] text-white h-[100dvh] md:h-auto md:min-h-screen overflow-hidden z-[60] p-4 flex flex-col
                 transform transition-transform duration-300 ease-in-out
                 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
             `}>
