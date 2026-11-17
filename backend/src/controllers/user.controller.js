@@ -334,17 +334,32 @@ export const refreshAccessToken = async (req, res) => {
     }
 
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    const user = await User.findById(decoded.id).select("+sessions");
 
-    const tokens = user && !user.deletedAt ? rotateSession(user, refreshToken, decoded) : null;
+    // Two refreshes for the same account at once (several tabs, or the app and
+    // the website) used to fail the second save with a VersionError and sign
+    // the person out. Reload and try again instead.
+    let tokens = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const user = await User.findById(decoded.id).select("+sessions");
+      tokens = user && !user.deletedAt ? rotateSession(user, refreshToken, decoded) : null;
+      try {
+        if (!tokens) {
+          if (user) await user.save({ validateBeforeSave: false }).catch(() => {});
+          break;
+        }
+        await user.save({ validateBeforeSave: false });
+        break;
+      } catch (err) {
+        if (err?.name !== "VersionError" || attempt === 3) throw err;
+        tokens = null;
+      }
+    }
     if (!tokens) {
-      if (user) await user.save({ validateBeforeSave: false }).catch(() => {});
       return res.status(401).json({
         success: false,
         message: "Invalid refresh token",
       });
     }
-    await user.save({ validateBeforeSave: false });
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } = tokens;
 
     res.status(200).json({
