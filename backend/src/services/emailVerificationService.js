@@ -16,9 +16,17 @@ export const RESEND_SECONDS = 60;
 export const hashCode = (userId, code) =>
   crypto.createHash("sha256").update(`${userId}:${String(code).trim()}`).digest("hex");
 
+/**
+ * Sign-up codes are switched off unless EMAIL_VERIFICATION=on is set on the
+ * server. While off, new accounts sign straight in and anyone still waiting
+ * for a code can log in normally.
+ */
+export const emailVerificationEnabled = () =>
+  String(process.env.EMAIL_VERIFICATION || "").toLowerCase() === "on";
+
 /** Does this user still need to verify their email? */
 export const needsEmailVerification = (user) =>
-  Boolean(user?.emailVerificationRequired) && !user?.emailVerifiedAt;
+  emailVerificationEnabled() && Boolean(user?.emailVerificationRequired) && !user?.emailVerifiedAt;
 
 /** Seconds until another code may be sent (0 = now). */
 export const resendWaitSeconds = (user, now = Date.now()) => {
