@@ -127,3 +127,11 @@ html.is-app .fixed.bottom-20 {
   body.has-bid-bar { padding-bottom: 7rem; }
   body.has-bid-bar .scroll-top-btn { display: none; }
 }
+
+/* App: dashboard side menu fills the screen between the status bar and the
+   home bar, so its Log Out button is never hidden. */
+html.is-app aside.fixed {
+  top: 0;
+  padding-top: calc(1rem + var(--sat));
+  padding-bottom: calc(1rem + var(--sab));
+}
