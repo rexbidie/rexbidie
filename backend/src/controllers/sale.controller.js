@@ -4,6 +4,8 @@ import {
     setVatDecision,
     issuePaymentRequest,
     paymentRequestSnapshot,
+    bankTransferAmount,
+    BANK_CURRENCY,
     ensureBuyerIban,
 } from "../services/saleService.js";
 import {
@@ -153,6 +155,16 @@ export const previewPaymentRequest = async (req, res) => {
             Object.assign(snapshot, paymentRequestSnapshot(sale));
         }
         if (!snapshot.bank) snapshot.bank = { iban: "Not available yet - see the Sales page", reference: sale.reference };
+        // £ sales are paid by transfer in euro: show today's figure. The sent
+        // request fixes the rate when it's issued.
+        if (sale.currency !== BANK_CURRENCY && !snapshot.bank.payAmount) {
+            try {
+                const pay = bankTransferAmount(sale);
+                Object.assign(snapshot.bank, { payCurrency: pay.currency, payAmount: pay.amount, rate: pay.rate });
+            } catch {
+                // No rate yet: the preview just shows the £ total.
+            }
+        }
         const pdf = await renderPaymentRequestPdf(snapshot);
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `inline; filename="${sale.reference}-PR-draft.pdf"`);
