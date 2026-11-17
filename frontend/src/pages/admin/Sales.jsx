@@ -918,6 +918,11 @@ function Sales() {
                                                         <div className="text-xs font-mono text-gray-700 mt-1" title="Buyer's own Stripe bank-transfer account">
                                                             {s.stripe.bankTransfer.iban ||
                                                                 `${s.stripe.bankTransfer.sortCode} ${s.stripe.bankTransfer.accountNumber}`}
+                                                            {s.stripe.bankTransfer.payAmount ? (
+                                                                <span className="block font-sans text-gray-500" title="Sterling sale paid by bank transfer in euro">
+                                                                    Pays €{Number(s.stripe.bankTransfer.payAmount).toLocaleString("en-IE", { minimumFractionDigits: 2 })} by transfer
+                                                                </span>
+                                                            ) : null}
                                                         </div>
                                                     ) : ["sold", "request_sent"].includes(s.status) ? (
                                                         <div

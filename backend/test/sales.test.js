@@ -12,6 +12,7 @@ import {
     instructionsFromFunding,
     isCardCheckoutAvailable,
     cardCheckoutUrl,
+    bankTransferAmount,
 } from "../src/services/saleService.js";
 
 // ─── Regions ───────────────────────────────────────────────
@@ -148,6 +149,25 @@ test("pdf: payment request renders", async () => {
     const pdf = await renderPaymentRequestPdf(paymentRequestSnapshot(s, new Date("2026-11-09T10:00:00Z")));
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
     assert.ok(pdf.length > 2000);
+});
+
+test("sterling sales are paid by bank transfer in euro, rounded up to the cent", () => {
+    const rates = { GBP: { rates: { EUR: 1.1834 } } };
+    assert.deepEqual(bankTransferAmount({ currency: "EUR", total: 1234.5 }, rates), { currency: "EUR", amount: 1234.5, rate: null });
+    const gbp = bankTransferAmount({ currency: "GBP", total: 1000 }, rates);
+    assert.deepEqual(gbp, { currency: "EUR", amount: 1183.4, rate: 1.1834 });
+    assert.equal(bankTransferAmount({ currency: "GBP", total: 1000.01 }, rates).amount, 1183.42); // 1183.41183 → up
+    assert.throws(() => bankTransferAmount({ currency: "GBP", total: 10 }, null), /Exchange rate/);
+});
+
+test("pdf: sterling payment request shows the euro amount to transfer", async () => {
+    const s = buildSale({ ...AUCTION, baseCurrency: "GBP" }, BUYER, SELLER);
+    s.stripe = { bankTransfer: { iban: "IE00TEST", bic: "TESTIE2X", accountHolderName: "RexBid", reference: "ABCD1234", payCurrency: "EUR", payAmount: 2500.55, rate: 1.18 } };
+    const snap = paymentRequestSnapshot(s, new Date("2026-11-09T10:00:00Z"));
+    assert.equal(snap.currency, "GBP");
+    assert.equal(snap.bank.payAmount, 2500.55);
+    const pdf = await renderPaymentRequestPdf(snap);
+    assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
 });
 
 test("stripe: IBAN is read from customer funding instructions", () => {

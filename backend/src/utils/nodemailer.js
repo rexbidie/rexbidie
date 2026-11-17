@@ -4089,7 +4089,9 @@ const paymentRequestEmail = async (sale, snapshot, pdfBuffer, filename) => {
                 ${b.sortCode ? createSummaryRow('Sort code:', b.sortCode) : ''}
                 ${b.accountNumber ? createSummaryRow('Account number:', `<strong>${b.accountNumber}</strong>`) : ''}
                 ${createSummaryRow('Reference:', b.reference || snapshot.reference)}
+                ${b.payAmount ? createSummaryRow('Amount to transfer:', `<strong>${docMoney(b.payCurrency, b.payAmount)}</strong>`) : ''}
             `)}
+            ${b.payAmount && b.rate ? `<p style="font-size: 13px; color: ${BRAND_COLORS.textLight};">Bank transfers are made in euro: ${fmt(snapshot.total)} converted at 1 ${cur} = ${Number(b.rate).toFixed(4)} ${b.payCurrency}.${snapshot.cardPayUrl ? ` Card payments are charged in ${cur === 'GBP' ? 'sterling' : cur}.` : ''}</p>` : ''}
 
             <p>Please pay within 48 hours, by <strong>${due}</strong>. These bank details are unique to you, so your payment is matched to this purchase automatically and we'll confirm as soon as it arrives.</p>
             ${snapshot.cardPayUrl ? `
