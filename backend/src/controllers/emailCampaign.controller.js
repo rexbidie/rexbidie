@@ -6,8 +6,9 @@ import agendaService from "../services/agendaService.js";
 import { sendMarketingCampaignEmail } from "../utils/nodemailer.js";
 import {
     deleteFromCloudinary,
-    uploadImageToCloudinary,
+    uploadEmailImageToR2,
 } from "../utils/cloudinary.js";
+import { prepareEmailImage } from "../utils/emailImage.js";
 
 // ─── Placeholder keys supported in the body ─────────────────
 const PLACEHOLDER_KEYS = [
@@ -688,9 +689,24 @@ export const uploadCampaignImage = async (req, res) => {
                 .json({ success: false, message: "Only image files are allowed" });
         }
 
-        const result = await uploadImageToCloudinary(
-            req.file.buffer,
-            "email-campaigns"
+        let prepared;
+        try {
+            prepared = await prepareEmailImage(req.file.buffer, {
+                mimetype: req.file.mimetype,
+                originalName: req.file.originalname,
+            });
+        } catch (err) {
+            console.error("Email image could not be read:", err);
+            return res.status(400).json({
+                success: false,
+                message: "That image couldn't be read. Try a JPG or PNG, or take a screenshot of it.",
+            });
+        }
+
+        const result = await uploadEmailImageToR2(
+            prepared,
+            "email-campaigns",
+            req.file.originalname
         );
 
         return res.status(200).json({

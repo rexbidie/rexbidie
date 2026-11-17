@@ -291,6 +291,7 @@ const EmailCampaignFormModal = ({ isOpen, onClose, onSuccess, campaign }) => {
                                 control={control}
                                 placeholder="Write your email content..."
                                 imageUploadUrl="/api/v1/admin/email/upload-image"
+                                allowButtons
                             />
                         </div>
 
