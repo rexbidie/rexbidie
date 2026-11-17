@@ -1,4 +1,5 @@
 import { checkEmail } from "../utils/emailCheck.js";
+import { confirmVerificationCode, needsEmailVerification, resendWaitSeconds, sendVerificationCode } from "../services/emailVerificationService.js";
 import User from "../models/user.model.js";
 import { StripeService } from "../services/stripeService.js";
 import jwt from "jsonwebtoken";
@@ -182,6 +183,8 @@ export const registerUser = async (req, res) => {
       phone,
       image,
       isVerified: true, //changed
+      // Must confirm the email address with a code before using the account.
+      emailVerificationRequired: true,
       // identificationDocument: identificationDocumentUrl,
       // identificationDocumentPublicId,
       // identificationStatus: identificationDocumentUrl ? 'pending' : undefined,
@@ -204,11 +207,19 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // await generateTokensAndRespond(user, res, 'Registration successful');
-    await generateTokensAndRespond(user, req, res, "Registration successful");
-
-    //send registration email
-    welcomeEmail(user).catch(err => console.error("failed to send welcome email:", err));
+    // Not signed in yet: the email address is confirmed with a code first
+    // (POST /verify-email). The welcome email goes once it's confirmed.
+    try {
+      await sendVerificationCode(user);
+    } catch (err) {
+      console.error("Could not send verification code:", err?.message);
+    }
+    return res.status(201).json({
+      success: true,
+      requiresEmailVerification: true,
+      message: "We've emailed you a 6-digit code. Enter it to finish creating your account.",
+      data: { email: user.email },
+    });
 
     // const adminUsers = await User.find({ userType: "admin" });
     // for (const admin of adminUsers) {
@@ -260,6 +271,19 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: "Wrong password",
+      });
+    }
+
+    // New accounts must confirm their email first; send a fresh code if allowed.
+    if (needsEmailVerification(user)) {
+      if (resendWaitSeconds(user) === 0) {
+        await sendVerificationCode(user).catch((err) => console.error("Could not send verification code:", err?.message));
+      }
+      return res.status(403).json({
+        success: false,
+        code: "EMAIL_NOT_VERIFIED",
+        email: user.email,
+        message: "Please confirm your email address. We've sent a 6-digit code to your inbox.",
       });
     }
 
@@ -1191,5 +1215,53 @@ export const updateCurrency = async (req, res) => {
     return res
       .status(500)
       .json({ success: false, message: "Failed to update currency" });
+  }
+};
+
+/**
+ * @desc    Confirm the email address with the 6-digit code; signs the person in.
+ * @route   POST /api/v1/users/verify-email  { email, code, rememberMe?, gaClientId? }
+ * @access  Public
+ */
+export const verifyEmail = async (req, res) => {
+  try {
+    const { user, alreadyVerified } = await confirmVerificationCode(req.body?.email, req.body?.code);
+    if (!alreadyVerified) {
+      welcomeEmail(user).catch((err) => console.error("failed to send welcome email:", err));
+    }
+    await generateTokensAndRespond(user, req, res, "Email confirmed. Welcome to RexBid!");
+  } catch (error) {
+    if (!error?.status) console.error("Verify email error:", error);
+    res.status(error?.status || 500).json({
+      success: false,
+      code: error?.code,
+      message: error?.status ? error.message : "Something went wrong. Please try again.",
+    });
+  }
+};
+
+/**
+ * @desc    Send a new code. Always answers the same way, so it can't be used to
+ *          find out which addresses have accounts.
+ * @route   POST /api/v1/users/resend-verification  { email }
+ * @access  Public
+ */
+export const resendVerification = async (req, res) => {
+  try {
+    const address = String(req.body?.email || "").toLowerCase().trim();
+    const user = address ? await User.findOne({ email: address }) : null;
+    let wait = 0;
+    if (user && !user.deletedAt && needsEmailVerification(user)) {
+      wait = resendWaitSeconds(user);
+      if (!wait) await sendVerificationCode(user);
+    }
+    res.json({
+      success: true,
+      retryAfter: wait,
+      message: wait ? `Please wait ${wait} seconds before asking for another code.` : "If that address needs confirming, we've sent a new code.",
+    });
+  } catch (error) {
+    console.error("Resend verification error:", error);
+    res.status(500).json({ success: false, message: "Could not send a code. Please try again." });
   }
 };

@@ -8,6 +8,8 @@ import {
     getSellerStats,
     getVerificationStatus,
     loginUser,
+    verifyEmail,
+    resendVerification,
     logoutUser,
     refreshAccessToken,
     registerUser,
@@ -37,6 +39,9 @@ const userRouter = Router();
 // Public routes
 userRouter.post('/register', upload.single('identificationDocument'), registerUser);
 userRouter.post('/login', loginUser);
+// Confirm the email address with the 6-digit code from sign-up
+userRouter.post('/verify-email', verifyEmail);
+userRouter.post('/resend-verification', resendVerification);
 userRouter.post('/refresh-token', refreshAccessToken);
 userRouter.post('/logout', auth, logoutUser);
 userRouter.get('/me/deletion-check', auth, deletionCheck);

@@ -266,7 +266,10 @@ const Register = () => {
 
             // toast.dismiss(loadingToastId);
 
-            if (data.success) {
+            if (data.success && data.requiresEmailVerification) {
+                toast.success(data.message);
+                navigate(`/verify-email?email=${encodeURIComponent(data.data.email)}&new=1`);
+            } else if (data.success) {
                 localStorage.setItem('accessToken', data.data.accessToken);
                 localStorage.setItem('refreshToken', data.data.refreshToken);
                 localStorage.setItem('user', JSON.stringify(data.data.user));
@@ -421,6 +424,13 @@ const Register = () => {
                     setIsLoading(false);
                     return;
                 }
+            }
+
+            // Confirm the email address with the code we've just sent.
+            if (data.requiresEmailVerification) {
+                toast.success(data.message);
+                navigate(`/verify-email?email=${encodeURIComponent(data.data.email)}&new=1`);
+                return;
             }
 
             // No 3DS required – registration completed immediately

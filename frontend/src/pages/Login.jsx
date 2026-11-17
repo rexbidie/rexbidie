@@ -71,6 +71,10 @@ const Login = () => {
         setIsLoading(true);
         try {
             const data = await login({ email: creds.email, password: creds.password, rememberMe: true });
+            if (data?.needsEmailVerification) {
+                navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
+                return;
+            }
             if (data?.success) {
                 haptics.bidPlaced();
                 toast.success(data.message);
@@ -108,6 +112,12 @@ const Login = () => {
             const offerBio = bio.available && shouldOfferBiometric(normalizedLoginData.email);
             if (offerBio) holdRedirect.current = true;
             const data = await login(normalizedLoginData);
+
+            if (data?.needsEmailVerification) {
+                holdRedirect.current = false;
+                navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
+                return;
+            }
 
             if (data && data.success) {
                 toast.success(data.message);

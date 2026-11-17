@@ -85,6 +85,11 @@ export const AuthProvider = ({ children }) => {
                 return { success: true, message: data.message, userType: data.data.user.userType }
             }
         } catch (error) {
+            // Signed up but the email isn't confirmed yet: a new code has been sent.
+            if (error?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+                toast(error.response.data.message, { duration: 8000 });
+                return { success: false, needsEmailVerification: true, email: error.response.data.email };
+            }
             toast.error(error?.response?.data?.message);
             console.log(error);
         }
