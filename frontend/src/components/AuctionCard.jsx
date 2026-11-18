@@ -313,7 +313,7 @@ function AuctionCard({ auction }) {
                             }
                         </div>
 
-                        {/* Reserve progress, last 24 hours before closing */}
+                        {/* "Reserve Met" once the reserve is met (the photo already says "Reserve") */}
                         <ReserveBadge auction={auction} hideNotMet className="-mt-2 mb-3" />
 
                         <div className="text-xs text-gray-500 text-center flex items-center justify-around">
