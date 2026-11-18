@@ -17,6 +17,7 @@ export const PUSH_CATEGORY = {
     buyItNow: "buyItNow",
     newQuestion: "questions",
     questionAnswered: "questions",
+    reserveNudge: "myListings",
 };
 
 /**

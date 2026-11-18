@@ -65,17 +65,28 @@ const publicSeller = (u, { keepFullName = false } = {}) => {
   return out;
 };
 
-const reserveSummary = (a) => {
+// Buyers see one of three reserve badges, never a percentage:
+//   "met"     – reserve met, this lot will sell (any time)
+//   "close"   – within 10% of the reserve in the last 3 hours
+//   "not_met" – otherwise
+export const RESERVE_CLOSE_WINDOW_MS = 3 * 60 * 60 * 1000;
+export const RESERVE_CLOSE_SHARE = 0.9;
+
+const reserveSummary = (a, now = Date.now()) => {
   const reserve = Number(a.reservePrice) || 0;
   const start = Number(a.startPrice) || 0;
   const current = Number(a.currentPrice) || 0;
   const hasReserve = reserve > 0 && reserve > start;
   const reserveMet = !hasReserve || current >= reserve;
-  // Rounded down to the nearest 10% so the exact reserve cannot be derived.
+  // Rounded down to the nearest 10%; only sellers and admins get this.
   const reserveProgress = hasReserve
     ? Math.min(100, Math.floor(((current / reserve) * 100) / 10) * 10)
     : 100;
-  return { hasReserve, reserveMet, reserveProgress };
+  const msLeft = new Date(a.endDate).getTime() - now;
+  const close = hasReserve && !reserveMet && Number(a.bidCount) > 0 && current >= reserve * RESERVE_CLOSE_SHARE
+    && msLeft > 0 && msLeft <= RESERVE_CLOSE_WINDOW_MS;
+  const reserveStatus = !hasReserve ? null : reserveMet ? "met" : close ? "close" : "not_met";
+  return { hasReserve, reserveMet, reserveProgress, reserveStatus };
 };
 
 /**
@@ -93,6 +104,7 @@ export const sanitizeAuctionForViewer = (auction, viewer = null) => {
   const isWinner = !!viewerId && idOf(a.winner) === viewerId;
 
   const summary = reserveSummary(a);
+  if (!isAdmin && !isSeller) delete summary.reserveProgress;
 
   // Buy It Now during the auction: worked out before the reserve is removed.
   // The public sees the price, whether it's open and why not; never the buyer.

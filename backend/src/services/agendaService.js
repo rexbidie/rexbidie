@@ -600,14 +600,15 @@ class AgendaService {
       }
     });
 
-    // Job to nudge sellers when their reserve is within reach in the last hour
+    // Nudge sellers (email + phone) when bidding is within 25% of their reserve
+    // in the last 3 hours, so they can lower it and sell.
     this.agenda.define("send reserve nudge notifications", async (job) => {
       try {
         const now = new Date();
-        const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+        const windowEnd = new Date(now.getTime() + 3 * 60 * 60 * 1000);
 
         // Only reserve auctions that:
-        //   - are still active and end within the next 60 minutes
+        //   - are still active and end within the next 3 hours
         //   - have at least one bid
         //   - have NOT yet met the reserve
         //   - current bid is >= 75% of reserve (i.e. within 25% of reserve)
@@ -615,7 +616,7 @@ class AgendaService {
         const candidates = await Auction.find({
           status: "active",
           auctionType: "reserve",
-          endDate: { $gt: now, $lte: oneHourFromNow },
+          endDate: { $gt: now, $lte: windowEnd },
           bidCount: { $gt: 0 },
           "notifications.reserveNudge": { $ne: true },
           $expr: {
@@ -631,7 +632,7 @@ class AgendaService {
           },
         }).populate(
           "seller",
-          "email username companyName firstName lastName currency preferences"
+          "email username companyName firstName lastName currency preferences userType"
         );
 
         if (candidates.length === 0) return;

@@ -53,7 +53,8 @@ test("anonymous visitor sees no private data", () => {
   assert.equal(out.commissionAmount, undefined);
   assert.equal(out.hasReserve, true);
   assert.equal(out.reserveMet, false);
-  assert.equal(out.reserveProgress, 70); // 75% rounded down to 70
+  assert.equal(out.reserveProgress, undefined); // buyers get a badge, never a percentage
+  assert.equal(out.reserveStatus, "not_met");
   assert.equal(out.offerCount, 2);
   assert.equal(out.pendingOfferCount, 1);
   assert.equal(out.participantCount, 1);
@@ -94,5 +95,17 @@ test("no reserve and reserve met", () => {
   assert.equal(noRes.reserveMet, true);
   const met = sanitizeAuctionForViewer({ ...sample(), currentPrice: 2500 }, null);
   assert.equal(met.reserveMet, true);
-  assert.equal(met.reserveProgress, 100);
+  assert.equal(met.reserveStatus, "met");
+  assert.equal(noRes.reserveStatus, null);
+});
+
+test("reserve badge: close to reserve only within 10% in the last 3 hours; sellers still get the figure", () => {
+  const hours = (h) => new Date(Date.now() + h * 3600 * 1000);
+  // sample: bid 1500 of reserve 2000 (75%)
+  const at = (price, h, viewer = null) => sanitizeAuctionForViewer({ ...sample(), currentPrice: price, bidCount: 3, endDate: hours(h) }, viewer);
+  assert.equal(at(1850, 2).reserveStatus, "close");
+  assert.equal(at(1850, 5).reserveStatus, "not_met");
+  assert.equal(at(1500, 2).reserveStatus, "not_met");
+  assert.equal(at(2000, 30).reserveStatus, "met");
+  assert.equal(at(1850, 5, { _id: SELLER, userType: "seller" }).reserveProgress, 90);
 });

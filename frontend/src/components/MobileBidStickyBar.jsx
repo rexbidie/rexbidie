@@ -2,6 +2,7 @@ import { Gavel, Zap, Banknote, Clock, Gift, Users, ShieldCheck, Bell, Loader, Tr
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import QuickBid from './bidding/QuickBid';
+import ReserveBadge from './bidding/ReserveBadge';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -122,7 +123,6 @@ const MobileBidStickyBar = ({
   const showGiveawayClaim = isGiveaway && isActive && !auction?.winner && auction?.status === 'active';
   const showProxyBid = showBidForm && auction?.allowProxyBidding;
 
-  const isReserveMet = !!auction?.reserveMet;
 
   const formatEndDate = (dateString) => {
     if (!dateString) return '';
@@ -234,14 +234,7 @@ const MobileBidStickyBar = ({
               )}
             </div>
 
-            {auction.auctionType === 'reserve' && timeRemained > 0 && timeRemained > 24 * 60 * 60 * 1000 && (
-              <div className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium w-fit ${isReserveMet
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-orange-50 text-blue-600 border border-blue-200'
-                }`}>
-                {isReserveMet ? '✓ Reserve Met' : 'Reserve Applies'}
-              </div>
-            )}
+            {auction.auctionType === 'reserve' && <ReserveBadge auction={auction} className="mt-2" />}
 
             <p className="mt-2 bg-blue-50 text-blue-600 border border-blue-300 px-2 py-1 rounded font-medium text-xs flex items-center gap-2 w-fit">{auction?.vatIncluded ? 'VAT to be added' : 'No VAT  to be added'}</p>
           </div>
@@ -340,65 +333,6 @@ const MobileBidStickyBar = ({
             )}
           </div>
         </div>
-
-        {/* Last 24 hours, no bids yet: say a reserve applies (the progress bar below starts with the first bid) */}
-        {auction.auctionType === "reserve" &&
-          auction.status === "active" &&
-          timeStatus === "counting-down" &&
-          timeRemained > 0 &&
-          timeRemained < 24 * 60 * 60 * 1000 &&
-          auction.hasReserve &&
-          !(auction.bidCount > 0) && (
-            <p className="mt-2 inline-flex text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200">
-              Reserve Applies
-            </p>
-          )}
-
-        {/* ----- RESERVE PROGRESS INDICATOR (only in last 24h) ----- */}
-        {auction.auctionType === "reserve" &&
-          auction.status === "active" &&
-          timeStatus === "counting-down" &&
-          timeRemained > 0 && // still active
-          timeRemained < 24 * 60 * 60 * 1000 && // last 24 hours
-          auction.hasReserve &&
-          auction.bidCount > 0 && // only show if there is at least one bid
-          (() => {
-            // Reserve amount is never sent to the browser; the server provides a
-            // rounded progress value and a met/not-met flag instead.
-            const reserveProgress = Number(auction.reserveProgress) || 0;
-            const reserveMet = !!auction.reserveMet;
-
-            return (
-              <div className="mt-2">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-xs text-secondary">
-                    Reserve Progress
-                  </span>
-
-                  <span
-                    className={`text-xs font-medium ${reserveMet
-                      ? "text-green-600"
-                      : "text-gray-600"
-                      }`}
-                  >
-                    {reserveMet ? "✅ Met" : "⏳ Not met"}
-                  </span>
-                </div>
-
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className={`h-2.5 rounded-full transition-all duration-500 ${reserveMet
-                      ? "bg-green-500"
-                      : "bg-orange-400"
-                      }`}
-                    style={{
-                      width: `${reserveProgress}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })()}
 
         {/* ============ One-tap bidding ============ */}
         {showBidForm && (
