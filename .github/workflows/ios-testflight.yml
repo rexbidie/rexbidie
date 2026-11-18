@@ -118,6 +118,10 @@ jobs:
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Building RexBid $VERSION ($BUILD)"
 
+      # The archive is signed locally without an Apple certificate ("-"), which
+      # keeps the app's entitlements (push notifications) but needs no registered
+      # iPhones. The export step then signs it properly for the App Store using
+      # Apple's cloud signing (the App Store Connect API key, Admin access).
       - name: Archive
         run: |
           xcodebuild archive \
@@ -128,7 +132,8 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO PROVISIONING_PROFILE_SPECIFIER= \
             MARKETING_VERSION="${{ steps.ver.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
             | tail -n 80
@@ -162,6 +167,14 @@ jobs:
           if [ "$DEST" = "upload" ]; then
             echo "Uploaded to App Store Connect. It appears in TestFlight after Apple finishes processing (about 15–30 minutes)." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Check the signed app
+        if: ${{ !inputs.upload }}
+        run: |
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
+          mkdir -p "$RUNNER_TEMP/ipa" && cd "$RUNNER_TEMP/ipa" && unzip -q "$IPA"
+          codesign -dvv Payload/*.app 2>&1 | grep -E "Authority|TeamIdentifier|Identifier=" || true
+          echo "--- entitlements"; codesign -d --entitlements - --xml Payload/*.app 2>/dev/null | plutil -p - || true
 
       - name: Clean up keys
         if: always()
