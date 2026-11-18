@@ -21,6 +21,7 @@ import { isNativeApp } from "../native/platform";
 import * as haptics from "../native/haptics";
 import { shareLink } from "../native/share";
 import QuickBid from "../components/bidding/QuickBid";
+import ReserveBadge from "../components/bidding/ReserveBadge";
 import useBuyerTerms from "../hooks/useBuyerTerms";
 
 const YouTubeEmbed = lazy(() => import('../components/YouTubeEmbed'));
@@ -1235,68 +1236,8 @@ function SingleAuction() {
                                     </span>
                                 )}
 
-                                {auction.auctionType === 'reserve' && timeRemaining > 0 && timeRemaining > 24 * 60 * 60 * 1000 && (
-                                    <p className={`${auction.reserveMet ? 'text-green-600 bg-green-100' : 'text-blue-600 bg-blue-100'} flex items-start self-start text-xs font-medium px-4 py-2 rounded-md`}>
-                                        {auction.reserveMet ? 'Reserve Met' : 'Reserve Applies'}
-                                    </p>
-                                )}
-
-                                {auction.auctionType === 'reserve' && auction.status === "active" &&
-                                    countdown.status === "counting-down" &&
-                                    timeRemaining > 0 &&
-                                    timeRemaining < 24 * 60 * 60 * 1000 &&
-                                    auction.hasReserve &&
-                                    auction.bidCount === 0 && (
-                                        <p className={`${auction.reserveMet ? 'text-green-600 bg-green-100' : 'text-blue-600 bg-blue-100'} flex items-start self-start text-xs font-medium px-4 py-2 rounded-md`}>
-                                            {auction.reserveMet ? 'Reserve Met' : 'Reserve Applies'}
-                                        </p>
-                                    )}
-
-                                {/* ----- RESERVE PROGRESS INDICATOR (only in last 24h) ----- */}
-                                {auction.auctionType === "reserve" &&
-                                    auction.status === "active" &&
-                                    countdown.status === "counting-down" &&
-                                    timeRemaining > 0 && // still active
-                                    timeRemaining < 24 * 60 * 60 * 1000 && // last 24 hours
-                                    auction.hasReserve &&
-                                    auction.bidCount > 0 && // only show if there is at least one bid
-                                    (() => {
-                                        // Reserve amount is never sent to the browser; the server provides a
-                                        // rounded progress value and a met/not-met flag instead.
-                                        const reserveProgress = Number(auction.reserveProgress) || 0;
-                                        const reserveMet = !!auction.reserveMet;
-
-                                        return (
-                                            <div className="mt-2 border-t pt-3">
-                                                <div className="mb-1 flex items-center justify-between">
-                                                    <span className="text-sm text-secondary">
-                                                        Reserve Progress
-                                                    </span>
-
-                                                    <span
-                                                        className={`text-xs font-medium ${reserveMet
-                                                            ? "text-green-600"
-                                                            : "text-gray-600"
-                                                            }`}
-                                                    >
-                                                        {reserveMet ? "✅ Met" : "⏳ Not met"}
-                                                    </span>
-                                                </div>
-
-                                                <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
-                                                    <div
-                                                        className={`h-2.5 rounded-full transition-all duration-500 ${reserveMet
-                                                            ? "bg-green-500"
-                                                            : "bg-orange-400"
-                                                            }`}
-                                                        style={{
-                                                            width: `${reserveProgress}%`,
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
+                                {/* Reserve: met / close / not met. No percentages for buyers. */}
+                                {auction.auctionType === 'reserve' && <ReserveBadge auction={auction} />}
 
                                 <p className="flex w-full justify-between border-b pb-2">
                                     <span className="text-secondary font-light">Starting Bid</span>

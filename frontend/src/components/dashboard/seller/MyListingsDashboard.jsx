@@ -52,6 +52,15 @@ const statusChip = (a, now) => {
     return ["Ended", "bg-gray-200 text-gray-700"];
 };
 
+/** Last 3 hours, bidding at 75–99% of the reserve: worth lowering it to sell. */
+const reserveWithinReach = (a, now) => {
+    const reserve = Number(a.reservePrice) || 0;
+    const bid = Number(a.currentPrice) || 0;
+    const left = new Date(a.endDate) - now;
+    return a.auctionType === "reserve" && a.status === "active" && Number(a.bidCount) > 0 && reserve > 0
+        && bid < reserve && bid >= 0.75 * reserve && left > 0 && left <= 3 * 36e5;
+};
+
 /** Things the seller should do, newest problems first. */
 const attentionItems = (auctions, now) => {
     const items = [];
@@ -60,6 +69,7 @@ const attentionItems = (auctions, now) => {
         if (a.pendingEdit?.status === "rejected") items.push({ kind: "editRejected", a });
         if (pendingOffers(a).length && !SOLD.includes(a.status)) items.push({ kind: "offers", a });
         if (a.status === "reserve_not_met" && !a.postAuctionBin?.status && now - new Date(a.endDate) < 72 * 36e5) items.push({ kind: "reserveNotMet", a });
+        if (reserveWithinReach(a, now)) items.push({ kind: "reserveClose", a });
     }
     return items;
 };
@@ -197,6 +207,15 @@ function MyListingsDashboard({ basePath }) {
                                     <p className="font-semibold">{pendingOffers(a).length} offer{pendingOffers(a).length === 1 ? "" : "s"} waiting for you</p>
                                     <p className="text-sm text-gray-600">{a.title}: {pendingOffers(a).map((o) => money(o.amount, a.baseCurrency)).join(", ")}</p>
                                     <div className="mt-auto"><Link className={btnPrimary} to={`${basePath}/offers/all`}>Review offers</Link></div>
+                                </>}
+                                {kind === "reserveClose" && <>
+                                    <p className="font-semibold">{a.title}: bidding is close to your reserve</p>
+                                    <p className="text-sm text-gray-600">
+                                        Bidding has reached {Math.floor((Number(a.currentPrice) / Number(a.reservePrice)) * 100)}% of your reserve with {timeLeft(a.endDate, now)} to go.
+                                        Top bid {money(a.convertedCurrentPrice ?? a.currentPrice, a.convertedCurrentPrice != null ? userCurrency : a.baseCurrency)}, reserve {money(a.convertedReservePrice ?? a.reservePrice, a.convertedReservePrice != null ? userCurrency : a.baseCurrency)}.
+                                        Lower your reserve to make sure it sells; if it isn&rsquo;t met, the lot ends unsold.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2 mt-auto"><button type="button" className={btnPrimary} onClick={() => setReserveLot(a)}>Lower reserve</button></div>
                                 </>}
                                 {kind === "reserveNotMet" && <>
                                     <p className="font-semibold">{a.title}: reserve not met</p>

@@ -17,7 +17,7 @@ const TICK_FIELDS = [
     "lastBidTime",
     "hasReserve",
     "reserveMet",
-    "reserveProgress",
+    "reserveStatus",
     "buyNowPrice",
     "watchlistCount",
     "paymentStatus",

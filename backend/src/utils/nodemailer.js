@@ -3943,6 +3943,19 @@ const websiteReviewUserEmail = async ({ name, email }) => {
 
 // Seller nudge: last hour, bid is within 25% of reserve
 const auctionReserveNudgeEmail = async (seller, listing) => {
+    const sellerHome = `/${seller?.userType === 'company' ? 'company' : seller?.userType === 'broker' ? 'broker' : 'seller'}`;
+    const reachedPct = Number(listing?.reservePrice) > 0
+        ? Math.floor((Number(listing.currentPrice || 0) / Number(listing.reservePrice)) * 100)
+        : 0;
+    notifyLater({
+        userId: seller?._id,
+        email: seller?.email,
+        type: "reserveNudge",
+        title: "Your reserve is within reach",
+        body: `${listing?.title || "Your lot"} has reached ${reachedPct}% of your reserve. Lower it to make sure it sells.`,
+        url: sellerHome,
+        dedupeKey: `reserveNudge:${listing?._id}`,
+    });
     if (!(await canSendEmail(seller.email, "reserveNudge"))) return false;
 
     try {
@@ -3966,13 +3979,16 @@ const auctionReserveNudgeEmail = async (seller, listing) => {
             1,
             Math.ceil((new Date(listing.endDate) - new Date()) / (60 * 1000))
         );
+        const hoursPart = Math.floor(minutesRemaining / 60);
+        const minsPart = minutesRemaining % 60;
+        const timeLeft = [hoursPart ? `${hoursPart} hour${hoursPart === 1 ? "" : "s"}` : "", minsPart ? `${minsPart} minute${minsPart === 1 ? "" : "s"}` : ""].filter(Boolean).join(" ");
 
         const suggestedReserve = currentBid; // lower it to the current bid to guarantee a sale
 
         const content = `
             <h2 style="text-align: center;">Your reserve is within reach</h2>
             <p style="text-align: center; color: ${BRAND_COLORS.textLight}; margin-top: -6px;">
-                Your auction ends in <strong>${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"}</strong> —
+                Your auction ends in <strong>${timeLeft}</strong> —
                 the highest bid is only <strong>${gapPercent}%</strong> below your reserve.
             </p>
 
@@ -3987,7 +4003,7 @@ const auctionReserveNudgeEmail = async (seller, listing) => {
                 ${createSummaryRow("Current Bid:", formatCurrency(currentBid, currency))}
                 ${createSummaryRow("Your Reserve:", formatCurrency(reservePrice, currency))}
                 ${createSummaryRow("Gap to Reserve:", formatCurrency(gap, currency))}
-                ${createSummaryRow("Ends In:", `${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"}`)}
+                ${createSummaryRow("Ends In:", timeLeft)}
             `)}
 
             <div style="background: #FFF7ED; border-left: 4px solid #F97316; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -4004,7 +4020,7 @@ const auctionReserveNudgeEmail = async (seller, listing) => {
 
             <p>Hi ${seller.firstName || seller.companyName || seller.username || "there"},</p>
             <p>
-                Your listing <strong>${listing.title}</strong> is in its final hour.
+                Your listing <strong>${listing.title}</strong> is in its final hours.
                 The current highest bid is <strong>${formatCurrency(currentBid, currency)}</strong>,
                 and your reserve is <strong>${formatCurrency(reservePrice, currency)}</strong> — a
                 difference of just <strong>${formatCurrency(gap, currency)}</strong>.
@@ -4016,7 +4032,7 @@ const auctionReserveNudgeEmail = async (seller, listing) => {
             </p>
 
             <div style="text-align: center; margin: 25px 0;">
-                ${createButton("Lower Reserve Price", `${FRONTEND_URL}/seller/auctions/all`, "primary")}
+                ${createButton("Lower Reserve Price", `${FRONTEND_URL}${sellerHome}`, "primary")}
             </div>
 
             <p style="text-align: center; color: ${BRAND_COLORS.textLight}; font-size: 13px;">
@@ -4029,7 +4045,7 @@ const auctionReserveNudgeEmail = async (seller, listing) => {
         const info = await transporter.sendMail({
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: seller.email,
-            subject: `⏰ ${minutesRemaining}m left — your reserve is ${gapPercent}% away from a sale`,
+            subject: `${timeLeft} left: your reserve is ${gapPercent}% away from a sale`,
             html,
         });
 
