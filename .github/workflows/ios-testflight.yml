@@ -138,6 +138,24 @@ jobs:
             | tail -n 80
           test -d "$RUNNER_TEMP/RexBid.xcarchive"
 
+      # An unsigned archive carries no entitlements, so add them here (push
+      # notifications, rexbid.ie links). The export step keeps them when it
+      # signs the app for the App Store.
+      - name: Add entitlements to the archive
+        run: |
+          APP=$(ls -d "$RUNNER_TEMP"/RexBid.xcarchive/Products/Applications/*.app | head -1)
+          ENT="$RUNNER_TEMP/App.entitlements"
+          cp ios/App/App/App.entitlements "$ENT"
+          /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$ENT"
+          /usr/libexec/PlistBuddy -c "Add :application-identifier string $APPLE_TEAM_ID.ie.rexbid.app" "$ENT"
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $APPLE_TEAM_ID" "$ENT"
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -maxdepth 1 \( -name "*.framework" -o -name "*.dylib" \) -exec codesign --force -s - {} \;
+          fi
+          find "$APP/PlugIns" -maxdepth 1 -name "*.appex" -exec codesign --force -s - {} \; 2>/dev/null || true
+          codesign --force -s - --entitlements "$ENT" "$APP"
+          codesign -d --entitlements - --xml "$APP" | plutil -p -
+
       - name: Export and upload to App Store Connect
         run: |
           DEST=export; [ "${{ inputs.upload }}" = "true" ] && DEST=upload
