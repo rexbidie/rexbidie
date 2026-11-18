@@ -518,6 +518,27 @@ export const updateBuyerDetails = async (req, res) => {
     }
 };
 
+export const refundInfo = async (req, res) => {
+    try {
+        const { refundableFor } = await import("../services/refundService.js");
+        const sale = await Sale.findById(req.params.saleId);
+        if (!sale) return res.status(404).json({ success: false, message: "Sale not found" });
+        res.json({ success: true, data: await refundableFor(sale) });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+export const refundBuyer = async (req, res) => {
+    try {
+        const { refundSale } = await import("../services/refundService.js");
+        const { refund, full } = await refundSale(req.params.saleId, req.body || {}, req.user);
+        res.json({ success: true, data: { refund, full } });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
 export const updateBuyerFee = async (req, res) => {
     try {
         const { setBuyerFee } = await import("../services/saleService.js");
