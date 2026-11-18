@@ -27,12 +27,16 @@ import {
     unlinkedStripeAccounts,
     linkSellerStripeAccount,
     updateBuyerFee,
+    stripeMoney,
+    sendCommissionToBank,
     importFees,
 } from "../controllers/sale.controller.js";
 
 // Mounted at /api/v1/admin/sales
 export const adminSaleRouter = Router();
 adminSaleRouter.get("/", authAdmin, listSales);
+adminSaleRouter.get("/stripe-money", authAdmin, stripeMoney);
+adminSaleRouter.post("/stripe-money/send-to-bank", authAdmin, sendCommissionToBank);
 adminSaleRouter.post("/sync", authAdmin, runSync);
 adminSaleRouter.post("/issue-payment-requests", authAdmin, issuePaymentRequests);
 adminSaleRouter.post("/issue-documents", authAdmin, issueDocuments);
