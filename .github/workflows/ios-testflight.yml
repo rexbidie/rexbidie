@@ -118,10 +118,9 @@ jobs:
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Building RexBid $VERSION ($BUILD)"
 
-      # The archive is signed locally without an Apple certificate ("-"), which
-      # keeps the app's entitlements (push notifications) but needs no registered
-      # iPhones. The export step then signs it properly for the App Store using
-      # Apple's cloud signing (the App Store Connect API key, Admin access).
+      # The archive is built unsigned, which needs no registered iPhones. The
+      # export step then signs it for the App Store using Apple's cloud signing
+      # (the App Store Connect API key, Admin access).
       - name: Archive
         run: |
           xcodebuild archive \
@@ -133,7 +132,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGNING_ALLOWED=NO \
             MARKETING_VERSION="${{ steps.ver.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
             | tail -n 80
