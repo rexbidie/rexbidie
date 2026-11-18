@@ -490,6 +490,24 @@ export const linkSellerStripeAccount = async (req, res) => {
     }
 };
 
+export const stripeMoney = async (req, res) => {
+    try {
+        const { getStripeMoney } = await import("../services/stripeMoneyService.js");
+        res.json({ success: true, data: await getStripeMoney() });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+export const sendCommissionToBank = async (req, res) => {
+    try {
+        const { sendToBank } = await import("../services/stripeMoneyService.js");
+        res.json({ success: true, data: await sendToBank(req.body?.amount, req.user) });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
 export const updateBuyerDetails = async (req, res) => {
     try {
         const { setBuyerDetails } = await import("../services/saleService.js");

@@ -1,6 +1,7 @@
 import {
     MailWarning,
     Clock,
+    Landmark,
     LayoutDashboard,
     LogOut,
     Users,
@@ -88,6 +89,11 @@ const navigation = [
         name: 'Last Chance',
         path: '/admin/last-chance',
         icon: <ShoppingCart size={20} />
+    },
+    {
+        name: 'Stripe Money',
+        path: '/admin/stripe-money',
+        icon: <Landmark size={20} />
     },
     {
         name: 'Sale Night Times',

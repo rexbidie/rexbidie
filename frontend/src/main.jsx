@@ -121,6 +121,7 @@ const AdminPayouts = lazy(() => import('./pages/admin/Payouts'));
 const AdminSales = lazy(() => import('./pages/admin/Sales'));
 const AdminBuyItNow = lazy(() => import('./pages/admin/BuyItNow'));
 const AdminSaleTimes = lazy(() => import('./pages/admin/SaleTimes'));
+const AdminStripeMoney = lazy(() => import('./pages/admin/StripeMoney'));
 const AdminPayoutMethods = lazy(() => import('./pages/admin/PayoutMethods'));
 const AuctionDates = lazy(() => import('./pages/admin/AuctionDates'));
 const EmailHealth = lazy(() => import('./pages/admin/EmailHealth'));
@@ -674,6 +675,16 @@ createRoot(document.getElementById('root')).render(
                             element={
                                 <Suspense fallback={<LoadingSpinner height={'750px'} />}>
                                     <AdminBuyItNow />
+                                </Suspense>
+                            }
+                        />
+
+                        {/* Admin Stripe money */}
+                        <Route
+                            path='/admin/stripe-money'
+                            element={
+                                <Suspense fallback={<LoadingSpinner height={'750px'} />}>
+                                    <AdminStripeMoney />
                                 </Suspense>
                             }
                         />
