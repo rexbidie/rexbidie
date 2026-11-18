@@ -232,3 +232,25 @@ never included in the app.
 Releases so far: 1.0.0 (code 1) first release, Nov 2026 · 1.1.0 (code 3; code 2 skipped) new dashboards, one-tap
 bidding, accept highest bid, pay before submit, Featured page, Buy It Now on cards, Last Chance,
 lighter images, navy and gold app icon · 1.1.1 (code 4) Log out on the admin screen and in Profile → Security; side-menu Log Out no longer hidden behind the bottom bar.
+
+---
+
+## 8. Building the iPhone app without a Mac (GitHub Actions)
+
+The workflow `.github/workflows/ios-testflight.yml` builds the iPhone app on one of GitHub's Macs
+and uploads it to App Store Connect, where it appears in TestFlight. Run it from GitHub:
+**Actions → "iPhone app: build and upload" → Run workflow**.
+
+It needs six repository secrets (GitHub → Settings → Secrets and variables → Actions):
+
+| Secret | Where it comes from |
+|---|---|
+| `APPLE_TEAM_ID` | developer.apple.com → Membership details → Team ID |
+| `ASC_KEY_ID` | App Store Connect → Users and Access → Integrations → App Store Connect API → your key's **Key ID** |
+| `ASC_ISSUER_ID` | Same page, **Issuer ID** at the top |
+| `ASC_KEY_P8` | The downloaded `AuthKey_XXXX.p8` file's full contents (Admin access key, needed so the build can create its own signing certificate) |
+| `GOOGLE_SERVICE_INFO_PLIST` | Full contents of `GoogleService-Info.plist` from Firebase |
+| `STRIPE_PUBLISHABLE_KEY` | The `pk_live_…` key the website uses |
+
+Version: the same `versionName` as Android (`android/app/build.gradle`); build number 1000 + the
+run number, so every run is a new build. The app is iPhone-only (runs on iPads in iPhone layout).

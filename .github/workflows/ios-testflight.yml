@@ -1,0 +1,159 @@
+# Builds the iPhone app on a GitHub Mac and uploads it to App Store Connect
+# (it then appears in TestFlight). Run it from GitHub: Actions → "iPhone app:
+# build and upload" → Run workflow. See docs/MOBILE-APP.md, section 3.
+#
+# Needs these repository secrets (Settings → Secrets and variables → Actions):
+#   APPLE_TEAM_ID               10-character Apple Team ID
+#   ASC_KEY_ID                  App Store Connect API key ID
+#   ASC_ISSUER_ID               App Store Connect API issuer ID
+#   ASC_KEY_P8                  The API key file's contents (-----BEGIN PRIVATE KEY----- …)
+#   GOOGLE_SERVICE_INFO_PLIST   The contents of GoogleService-Info.plist (Firebase)
+#   STRIPE_PUBLISHABLE_KEY      pk_live_… (the same public key the website uses)
+# Nothing secret is written to the repository or printed in the logs.
+
+name: "iPhone app: build and upload"
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to App Store Connect / TestFlight"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secrets are set
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          GSI: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+          STRIPE_PK: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+        run: |
+          missing=""
+          for name in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 GSI STRIPE_PK; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets:$missing (see the comment at the top of this file)"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Choose Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|rc' | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Private files (not in the repository)
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          GSI: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+          STRIPE_PK: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+        run: |
+          printf 'VITE_STRIPE_PUBLISHABLE_KEY=%s\n' "$STRIPE_PK" > .env.app.local
+          printf '%s\n' "$GSI" > ios/App/App/GoogleService-Info.plist
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey.p8"
+
+      - name: Add Firebase config to the Xcode project
+        run: |
+          gem install xcodeproj --no-document >/dev/null
+          ruby -r xcodeproj -e '
+            p = Xcodeproj::Project.open("ios/App/App.xcodeproj")
+            t = p.targets.find { |x| x.name == "App" }
+            g = p.main_group["App"]
+            unless g.files.any? { |f| f.path == "GoogleService-Info.plist" }
+              ref = g.new_reference("GoogleService-Info.plist")
+              t.resources_build_phase.add_file_reference(ref)
+              p.save
+            end'
+
+      - name: Build the app pages
+        run: npm run app:build
+
+      - name: Version numbers
+        id: ver
+        run: |
+          VERSION=$(grep -o 'versionName "[^"]*"' android/app/build.gradle | cut -d'"' -f2)
+          BUILD=$((1000 + GITHUB_RUN_NUMBER))
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Building RexBid $VERSION ($BUILD)"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/RexBid.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="${{ steps.ver.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
+            | tail -n 80
+          test -d "$RUNNER_TEMP/RexBid.xcarchive"
+
+      - name: Export and upload to App Store Connect
+        run: |
+          DEST=export; [ "${{ inputs.upload }}" = "true" ] && DEST=upload
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>$DEST</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/RexBid.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | tail -n 60
+          echo "### RexBid ${{ steps.ver.outputs.version }} (build ${{ steps.ver.outputs.build }})" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DEST" = "upload" ]; then
+            echo "Uploaded to App Store Connect. It appears in TestFlight after Apple finishes processing (about 15–30 minutes)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Clean up keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys" ios/App/App/GoogleService-Info.plist .env.app.local
