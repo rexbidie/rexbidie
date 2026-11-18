@@ -88,6 +88,19 @@ export default function StripeMoney() {
                                     <Tile label="Still clearing" value={eur(data.pending)} hint="Not available yet" />
                                 </div>
 
+                                <div className="bg-white border rounded-xl p-4 mb-3 text-sm">
+                                    <div className="font-semibold mb-2">How much of the {eur(data.available)} available is yours to send</div>
+                                    <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 max-w-md">
+                                        <span>Available in Stripe</span><span className="text-right">{eur(data.available)}</span>
+                                        <span>Less sellers&rsquo; money (cleared, not yet paid out)</span><span className="text-right">−{eur(data.heldForSellers)}</span>
+                                        <span>Less buffer for refunds and disputes</span><span className="text-right">−{eur(data.buffer)}</span>
+                                        <span className="font-semibold border-t pt-1">Safe to send to BOI</span><span className="text-right font-semibold border-t pt-1 text-green-800">{eur(data.safeToSend)}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        Only sales on the Sales page are counted. If you still owe a seller for a sale that isn&rsquo;t listed there, send less.
+                                    </p>
+                                </div>
+
                                 <div className="bg-white border rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
                                     <label className="text-sm flex-1">
                                         <span className="text-gray-600">Amount to send to BOI (€)</span>

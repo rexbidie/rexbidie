@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileText, Eye, Send, RefreshCw, Search, X, Receipt, History, XCircle, RotateCcw, Banknote, Link2, Unlock, Landmark, CheckCircle, Pencil, Upload } from "lucide-react";
+import { AlertTriangle, FileText, Eye, Send, RefreshCw, Search, X, Receipt, History, XCircle, RotateCcw, Banknote, Link2, Unlock, Landmark, CheckCircle, Pencil, Upload, Undo2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import axiosInstance from "../../utils/axiosInstance";
 import { AdminContainer, AdminHeader, AdminSidebar, LoadingSpinner } from "../../components";
@@ -209,6 +209,91 @@ function BuyerDetailsModal({ sale, onClose, onSaved }) {
                     <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
                     <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-white disabled:opacity-50">
                         {saving ? "Saving…" : "Save buyer details"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const REFUND_STATUS = {
+    requires_action: "waiting for buyer's bank details",
+    pending: "on its way",
+    succeeded: "paid back",
+    failed: "failed: refund outside Stripe",
+    canceled: "cancelled",
+};
+
+function RefundModal({ sale, onClose, onDone }) {
+    const [info, setInfo] = useState(null);
+    const [amount, setAmount] = useState("");
+    const [reason, setReason] = useState("");
+    const [reference, setReference] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        axiosInstance.get(`/api/v1/admin/sales/${sale._id}/refund`)
+            .then(({ data }) => { setInfo(data.data); setAmount(String(data.data.max)); })
+            .catch((err) => { toast.error(err.response?.data?.message || "Couldn't check the payment"); onClose(); });
+    }, [sale._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const full = info && Number(amount) >= info.max;
+    const save = async () => {
+        if (!reason.trim()) return toast.error("Add a reason");
+        const what = `${formatMoney(Number(amount), info.currency)} to ${sale.buyer?.name || "the buyer"}`;
+        if (!window.confirm(`Refund ${what}?${full ? " The sale will be marked failed." : ""}`)) return;
+        setSaving(true);
+        try {
+            await axiosInstance.post(`/api/v1/admin/sales/${sale._id}/refund`, { amount, reason, reference });
+            toast.success(info.bankTransfer ? "Refund started: Stripe has emailed the buyer for their bank details" : "Refund made", { duration: 6000 });
+            onDone();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Couldn't make the refund");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-5 border-b">
+                    <h3 className="text-lg font-semibold">Refund buyer · {sale.reference}</h3>
+                    <button onClick={onClose} aria-label="Close"><X size={20} /></button>
+                </div>
+                {!info ? <div className="p-8 text-center text-gray-500">Checking the payment…</div> : (
+                    <div className="p-5 space-y-4 text-sm">
+                        <p>
+                            {info.viaStripe
+                                ? info.bankTransfer
+                                    ? <>Paid by <strong>bank transfer</strong>. Stripe will email the buyer ({sale.buyer?.email}) for their bank details, then send the money. Until they reply the refund shows as &ldquo;waiting for buyer&rsquo;s bank details&rdquo;.</>
+                                    : <>Paid by <strong>card</strong>. The money goes back to the card, usually within 5–10 days.</>
+                                : <>Paid <strong>outside Stripe</strong>. Pay the buyer back from the bank first, then record it here with the bank reference.</>}
+                        </p>
+                        <p>Can be refunded: <strong>{formatMoney(info.max, info.currency)}</strong></p>
+                        <label className="block">
+                            <span className="text-gray-600">Amount to refund ({info.currency})</span>
+                            <input type="number" step="0.01" min="0" max={info.max} className="mt-1 w-full border rounded-lg p-2" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                        </label>
+                        {!info.viaStripe && (
+                            <label className="block">
+                                <span className="text-gray-600">Bank reference of the refund</span>
+                                <input className="mt-1 w-full border rounded-lg p-2" value={reference} onChange={(e) => setReference(e.target.value)} />
+                            </label>
+                        )}
+                        <label className="block">
+                            <span className="text-gray-600">Reason</span>
+                            <textarea className="mt-1 w-full border rounded-lg p-2" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Seller withdrew the item" />
+                        </label>
+                        <p className={`text-xs rounded-lg p-2 ${full ? "bg-red-50 text-red-700" : "bg-gray-50 text-gray-600"}`}>
+                            {full ? "Full refund: the sale will be marked failed and won't be paid out to the seller." : "Part refund: the sale stays as it is. Adjust the seller's payout if needed."}
+                        </p>
+                    </div>
+                )}
+                <div className="flex justify-end gap-2 p-5 border-t">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+                    <button onClick={save} disabled={saving || !info || !(Number(amount) > 0) || Number(amount) > (info?.max || 0)} className="px-4 py-2 rounded-lg bg-red-600 text-white disabled:opacity-50">
+                        {saving ? "Refunding…" : "Refund buyer"}
                     </button>
                 </div>
             </div>
@@ -582,6 +667,7 @@ function Sales() {
     const [manualSale, setManualSale] = useState(null);
     const [buyerSale, setBuyerSale] = useState(null);
     const [paySale, setPaySale] = useState(null);
+    const [refundSale, setRefundSale] = useState(null);
     const [linkSale, setLinkSale] = useState(null);
     const allSelected = selectable.length > 0 && selectable.every((s) => selected.has(s._id));
     const chosen = useMemo(() => sales.filter((s) => selected.has(s._id)), [sales, selected]);
@@ -966,6 +1052,11 @@ function Sales() {
                                                     <div className="font-semibold">{s.reference}</div>
                                                     <div className="text-gray-700">{s.title}</div>
                                                     <div className="text-xs text-gray-500">Sold {shortDate(s.saleDate)}</div>
+                                                    {(s.refunds || []).map((r, i) => (
+                                                        <span key={r.refundId || i} className="inline-block mt-1 mr-1 text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700" title={r.reason}>
+                                                            Refund {formatMoney(r.amount, r.currency)}: {r.method === "manual" ? "recorded" : REFUND_STATUS[r.status] || r.status}
+                                                        </span>
+                                                    ))}
                                                     {s.payment?.cardCheckoutAvailable && ["sold", "request_sent"].includes(s.status) && (
                                                         <span
                                                             className="inline-block mt-1 text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700"
@@ -1172,6 +1263,11 @@ function Sales() {
                                                                 <CheckCircle size={16} />
                                                             </button>
                                                         )}
+                                                        {(["paid", "collected", "payout_due"].includes(s.status) || (s.status === "failed" && s.payment?.paidAt)) && (
+                                                            <button title="Refund buyer" onClick={() => setRefundSale(s)} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
+                                                                <Undo2 size={16} />
+                                                            </button>
+                                                        )}
                                                         {canFail(s) && (
                                                             <button title="Mark as failed" onClick={() => markFailed(s)} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
                                                                 <XCircle size={16} />
@@ -1213,6 +1309,7 @@ function Sales() {
 
             {linkSale && <LinkStripeAccountModal sale={linkSale} onClose={() => setLinkSale(null)} onDone={() => { setLinkSale(null); load(); }} />}
 
+            {refundSale && <RefundModal sale={refundSale} onClose={() => setRefundSale(null)} onDone={() => { setRefundSale(null); load(); }} />}
             {paySale && <RecordPaymentModal sale={paySale} onClose={() => setPaySale(null)} onDone={() => { setPaySale(null); load(); }} />}
 
             {manualSale && (

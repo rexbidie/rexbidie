@@ -207,6 +207,14 @@ export const handleStripeWebhook = async (req, res) => {
                 else if (pi?.metadata?.type === 'listing_extras') await handleListingExtrasFailure(pi);
                 else await handlePaymentFailure(pi);
                 break;
+            case "refund.created":
+            case "refund.updated":
+            case "refund.failed":
+            case "charge.refund.updated": {
+                const { recordRefundUpdate } = await import("../services/refundService.js");
+                await recordRefundUpdate(event.data.object);
+                break;
+            }
             default:
                 console.log(`Unhandled event type ${event.type}`);
         }

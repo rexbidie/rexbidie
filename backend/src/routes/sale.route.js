@@ -27,6 +27,8 @@ import {
     unlinkedStripeAccounts,
     linkSellerStripeAccount,
     updateBuyerFee,
+    refundInfo,
+    refundBuyer,
     stripeMoney,
     sendCommissionToBank,
     updateBuyerDetails,
@@ -61,6 +63,8 @@ adminSaleRouter.post("/:saleId/record-payment", authAdmin, recordPaymentManually
 adminSaleRouter.post("/:saleId/link-payout-account", authAdmin, linkSellerStripeAccount);
 adminSaleRouter.patch("/:saleId/buyer-fee", authAdmin, updateBuyerFee);
 adminSaleRouter.patch("/:saleId/buyer", authAdmin, updateBuyerDetails);
+adminSaleRouter.get("/:saleId/refund", authAdmin, refundInfo);
+adminSaleRouter.post("/:saleId/refund", authAdmin, refundBuyer);
 adminSaleRouter.get("/:saleId/documents/:documentId", authAdmin, downloadDocument);
 
 // Mounted at /api/v1/sales (buyers and sellers)

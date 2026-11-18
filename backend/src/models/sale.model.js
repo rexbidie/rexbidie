@@ -137,6 +137,23 @@ const saleSchema = new Schema(
             cardCheckoutAvailable: Boolean,
         },
 
+        // Money paid back to the buyer (Stripe refunds, or by hand from the bank).
+        refunds: [
+            {
+                _id: false,
+                refundId: String,
+                amount: Number,
+                currency: String,
+                method: { type: String, enum: ["card", "bank_transfer", "manual"] },
+                // Stripe refund status: requires_action (waiting for the buyer's bank details), pending, succeeded, failed, canceled.
+                status: String,
+                reason: String,
+                reference: String,
+                by: { type: Schema.Types.ObjectId, ref: "User" },
+                at: Date,
+            },
+        ],
+
         // Sale marked failed by an admin (buyer did not pay, sale fell through).
         failure: {
             reason: String,
