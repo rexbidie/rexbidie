@@ -27,6 +27,7 @@ import {
     unlinkedStripeAccounts,
     linkSellerStripeAccount,
     updateBuyerFee,
+    updateBuyerDetails,
     importFees,
 } from "../controllers/sale.controller.js";
 
@@ -55,6 +56,7 @@ adminSaleRouter.post("/:saleId/manual-payout", authAdmin, manualPayout);
 adminSaleRouter.post("/:saleId/record-payment", authAdmin, recordPaymentManually);
 adminSaleRouter.post("/:saleId/link-payout-account", authAdmin, linkSellerStripeAccount);
 adminSaleRouter.patch("/:saleId/buyer-fee", authAdmin, updateBuyerFee);
+adminSaleRouter.patch("/:saleId/buyer", authAdmin, updateBuyerDetails);
 adminSaleRouter.get("/:saleId/documents/:documentId", authAdmin, downloadDocument);
 
 // Mounted at /api/v1/sales (buyers and sellers)
