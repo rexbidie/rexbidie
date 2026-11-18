@@ -1,30 +1,19 @@
-// Reserve badge for reserve lots, worked out by the server (utils/publicAuction.js):
-//   met     – reserve met, this lot will sell (shown at any time)
-//   close   – within 10% of the reserve in the last 3 hours
-//   not_met – otherwise
-// Buyers never see a percentage or the reserve itself.
-const BADGES = {
-    met: { label: "Reserve met · this lot will sell", cls: "bg-green-50 text-green-700 border-green-200" },
-    close: { label: "Close to reserve", cls: "bg-amber-50 text-amber-800 border-amber-200" },
-    not_met: { label: "Reserve not met", cls: "bg-gray-100 text-gray-600 border-gray-200" },
-};
+// Reserve badge for reserve lots: "Reserve Applies" until the reserve is met,
+// then "Reserve Met". Buyers never see a percentage or the reserve itself.
+export const reserveIsMet = (auction) => auction?.reserveStatus === "met" || (!auction?.reserveStatus && !!auction?.reserveMet);
 
-export const reserveStatusOf = (auction) => {
-    if (!auction || auction.auctionType !== "reserve") return null;
-    if (auction.reserveStatus) return auction.reserveStatus;
-    if (auction.hasReserve === false) return null;
-    return auction.reserveMet ? "met" : "not_met";
-};
-
-/** hideNotMet: listing cards only show the met / close badges (the image already says "Reserve"). */
+/** hideNotMet: listing cards only add "Reserve Met" (the photo already says "Reserve"). */
 const ReserveBadge = ({ auction, className = "", hideNotMet = false }) => {
-    if (!auction || auction.status !== "active") return null;
-    const status = reserveStatusOf(auction);
-    if (!status || (hideNotMet && status === "not_met")) return null;
-    const b = BADGES[status];
+    if (!auction || auction.auctionType !== "reserve" || auction.status !== "active" || auction.hasReserve === false) return null;
+    const met = reserveIsMet(auction);
+    if (!met && hideNotMet) return null;
     return (
-        <span className={`inline-flex w-fit items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${b.cls} ${className}`}>
-            {b.label}
+        <span
+            className={`inline-flex w-fit items-center rounded-md border px-3 py-1.5 text-xs font-semibold ${met
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-blue-50 text-blue-600 border-blue-200"} ${className}`}
+        >
+            {met ? "Reserve Met" : "Reserve Applies"}
         </span>
     );
 };
