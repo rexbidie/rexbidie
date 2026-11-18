@@ -65,6 +65,10 @@ const publicSeller = (u, { keepFullName = false } = {}) => {
   return out;
 };
 
+// The reserve progress bar shows only in the last 3 hours of a lot; before that
+// the figure isn't sent to the public at all (the seller and admins always get it).
+export const RESERVE_PROGRESS_WINDOW_MS = 3 * 60 * 60 * 1000;
+
 const reserveSummary = (a) => {
   const reserve = Number(a.reservePrice) || 0;
   const start = Number(a.startPrice) || 0;
@@ -93,6 +97,10 @@ export const sanitizeAuctionForViewer = (auction, viewer = null) => {
   const isWinner = !!viewerId && idOf(a.winner) === viewerId;
 
   const summary = reserveSummary(a);
+  const msLeft = new Date(a.endDate).getTime() - Date.now();
+  if (summary.hasReserve && !summary.reserveMet && !isAdmin && !isSeller && msLeft > RESERVE_PROGRESS_WINDOW_MS) {
+    summary.reserveProgress = null;
+  }
 
   // Buy It Now during the auction: worked out before the reserve is removed.
   // The public sees the price, whether it's open and why not; never the buyer.

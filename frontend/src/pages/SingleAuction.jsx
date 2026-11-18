@@ -22,6 +22,7 @@ import * as haptics from "../native/haptics";
 import { shareLink } from "../native/share";
 import QuickBid from "../components/bidding/QuickBid";
 import useBuyerTerms from "../hooks/useBuyerTerms";
+import { RESERVE_PROGRESS_WINDOW_MS } from "../components/bidding/ReserveProgress";
 
 const YouTubeEmbed = lazy(() => import('../components/YouTubeEmbed'));
 const ImageLightBox = lazy(() => import('../components/ImageLightBox'));
@@ -1235,7 +1236,7 @@ function SingleAuction() {
                                     </span>
                                 )}
 
-                                {auction.auctionType === 'reserve' && timeRemaining > 0 && timeRemaining > 24 * 60 * 60 * 1000 && (
+                                {auction.auctionType === 'reserve' && timeRemaining > 0 && timeRemaining > RESERVE_PROGRESS_WINDOW_MS && (
                                     <p className={`${auction.reserveMet ? 'text-green-600 bg-green-100' : 'text-blue-600 bg-blue-100'} flex items-start self-start text-xs font-medium px-4 py-2 rounded-md`}>
                                         {auction.reserveMet ? 'Reserve Met' : 'Reserve Applies'}
                                     </p>
@@ -1244,7 +1245,7 @@ function SingleAuction() {
                                 {auction.auctionType === 'reserve' && auction.status === "active" &&
                                     countdown.status === "counting-down" &&
                                     timeRemaining > 0 &&
-                                    timeRemaining < 24 * 60 * 60 * 1000 &&
+                                    timeRemaining < RESERVE_PROGRESS_WINDOW_MS &&
                                     auction.hasReserve &&
                                     auction.bidCount === 0 && (
                                         <p className={`${auction.reserveMet ? 'text-green-600 bg-green-100' : 'text-blue-600 bg-blue-100'} flex items-start self-start text-xs font-medium px-4 py-2 rounded-md`}>
@@ -1252,14 +1253,15 @@ function SingleAuction() {
                                         </p>
                                     )}
 
-                                {/* ----- RESERVE PROGRESS INDICATOR (only in last 24h) ----- */}
+                                {/* ----- RESERVE PROGRESS INDICATOR (only in last 3h) ----- */}
                                 {auction.auctionType === "reserve" &&
                                     auction.status === "active" &&
                                     countdown.status === "counting-down" &&
                                     timeRemaining > 0 && // still active
-                                    timeRemaining < 24 * 60 * 60 * 1000 && // last 24 hours
+                                    timeRemaining < RESERVE_PROGRESS_WINDOW_MS && // last 3 hours
                                     auction.hasReserve &&
                                     auction.bidCount > 0 && // only show if there is at least one bid
+                                    (auction.reserveMet || auction.reserveProgress != null) &&
                                     (() => {
                                         // Reserve amount is never sent to the browser; the server provides a
                                         // rounded progress value and a met/not-met flag instead.

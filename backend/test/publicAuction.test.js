@@ -96,3 +96,10 @@ test("no reserve and reserve met", () => {
   assert.equal(met.reserveMet, true);
   assert.equal(met.reserveProgress, 100);
 });
+
+test("reserve progress is only sent to the public in the last 3 hours", () => {
+  const hours = (h) => new Date(Date.now() + h * 3600 * 1000);
+  assert.equal(sanitizeAuctionForViewer({ ...sample(), endDate: hours(5) }, null).reserveProgress, null);
+  assert.equal(sanitizeAuctionForViewer({ ...sample(), endDate: hours(2.5) }, null).reserveProgress, 70);
+  assert.equal(sanitizeAuctionForViewer({ ...sample(), endDate: hours(5) }, { _id: SELLER, userType: "seller" }).reserveProgress, 70);
+});

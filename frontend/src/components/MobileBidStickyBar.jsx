@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import QuickBid from './bidding/QuickBid';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { RESERVE_PROGRESS_WINDOW_MS } from "./bidding/ReserveProgress";
 
 const MobileBidStickyBar = ({
   currentBid,
@@ -234,7 +235,7 @@ const MobileBidStickyBar = ({
               )}
             </div>
 
-            {auction.auctionType === 'reserve' && timeRemained > 0 && timeRemained > 24 * 60 * 60 * 1000 && (
+            {auction.auctionType === 'reserve' && timeRemained > 0 && timeRemained > RESERVE_PROGRESS_WINDOW_MS && (
               <div className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium w-fit ${isReserveMet
                 ? 'bg-green-50 text-green-700 border border-green-200'
                 : 'bg-orange-50 text-blue-600 border border-blue-200'
@@ -341,12 +342,12 @@ const MobileBidStickyBar = ({
           </div>
         </div>
 
-        {/* Last 24 hours, no bids yet: say a reserve applies (the progress bar below starts with the first bid) */}
+        {/* Last 3 hours, no bids yet: say a reserve applies (the progress bar below starts with the first bid) */}
         {auction.auctionType === "reserve" &&
           auction.status === "active" &&
           timeStatus === "counting-down" &&
           timeRemained > 0 &&
-          timeRemained < 24 * 60 * 60 * 1000 &&
+          timeRemained < RESERVE_PROGRESS_WINDOW_MS &&
           auction.hasReserve &&
           !(auction.bidCount > 0) && (
             <p className="mt-2 inline-flex text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200">
@@ -354,14 +355,15 @@ const MobileBidStickyBar = ({
             </p>
           )}
 
-        {/* ----- RESERVE PROGRESS INDICATOR (only in last 24h) ----- */}
+        {/* ----- RESERVE PROGRESS INDICATOR (only in last 3h) ----- */}
         {auction.auctionType === "reserve" &&
           auction.status === "active" &&
           timeStatus === "counting-down" &&
           timeRemained > 0 && // still active
-          timeRemained < 24 * 60 * 60 * 1000 && // last 24 hours
+          timeRemained < RESERVE_PROGRESS_WINDOW_MS && // last 3 hours
           auction.hasReserve &&
           auction.bidCount > 0 && // only show if there is at least one bid
+          (auction.reserveMet || auction.reserveProgress != null) &&
           (() => {
             // Reserve amount is never sent to the browser; the server provides a
             // rounded progress value and a met/not-met flag instead.

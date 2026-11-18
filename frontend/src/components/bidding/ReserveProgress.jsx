@@ -1,15 +1,16 @@
 import { getServerNow } from "../../utils/serverClock";
 
 // Reserve progress for listing cards (All Listings, Catalogue). Shown only in
-// the last 24 hours before a reserve lot closes, like on the listing page.
+// the last 3 hours before a reserve lot closes, like on the listing page.
 // The reserve itself is never sent to the browser: the server sends a progress
 // figure rounded down to 10% and a met / not-met flag.
-const LAST_DAY_MS = 24 * 60 * 60 * 1000;
+// Matches RESERVE_PROGRESS_WINDOW_MS on the server, which only sends the figure then.
+export const RESERVE_PROGRESS_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 const showReserveProgress = (auction, now = getServerNow()) => {
     if (!auction || auction.auctionType !== "reserve" || auction.status !== "active" || !auction.hasReserve) return false;
     const left = new Date(auction.endDate).getTime() - now;
-    return left > 0 && left < LAST_DAY_MS;
+    return left > 0 && left < RESERVE_PROGRESS_WINDOW_MS;
 };
 
 const ReserveProgress = ({ auction, className = "" }) => {
@@ -25,6 +26,8 @@ const ReserveProgress = ({ auction, className = "" }) => {
     }
 
     const met = !!auction.reserveMet;
+    // Loaded before the last 3 hours: no figure yet, so no bar until the next update.
+    if (!met && auction.reserveProgress == null) return null;
     const progress = met ? 100 : Math.max(0, Math.min(100, Number(auction.reserveProgress) || 0));
 
     return (
