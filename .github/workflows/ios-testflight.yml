@@ -20,6 +20,15 @@ on:
         description: "Upload to App Store Connect / TestFlight"
         type: boolean
         default: true
+      runner:
+        description: "GitHub Mac to use (if one type is busy, try another)"
+        type: choice
+        default: macos-15-intel
+        options:
+          - macos-15-intel
+          - macos-15
+          - macos-latest
+          - macos-14
 
 permissions:
   contents: read
@@ -30,7 +39,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 60
     defaults:
       run:
