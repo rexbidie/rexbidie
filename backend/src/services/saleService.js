@@ -808,6 +808,36 @@ export const matchOutsideStripePayments = async ({ limit = 30 } = {}) => {
  * charged by hand. Current sales can only be changed before a payment
  * request goes out.
  */
+/**
+ * Changes the buyer's details on one sale (who the documents are made out
+ * to and where emails go), e.g. a buyer invoicing through their company.
+ * The buyer's own account is not changed. Documents already sent keep the
+ * old details; re-send them to use the new ones.
+ */
+const BUYER_FIELDS = ["name", "companyName", "email", "phone", "vatNumber"];
+export const setBuyerDetails = async (saleId, input = {}, admin = null) => {
+    const sale = await Sale.findById(saleId);
+    if (!sale) throw Object.assign(new Error("Sale not found"), { status: 404 });
+    const clean = (v) => String(v ?? "").trim();
+    const next = Object.fromEntries(BUYER_FIELDS.map((f) => [f, clean(input[f])]));
+    const lines = (Array.isArray(input.addressLines) ? input.addressLines : String(input.addressLines ?? "").split(/\r?\n/))
+        .map(clean)
+        .filter(Boolean);
+    if (!next.name && !next.companyName) throw Object.assign(new Error("Enter a name or company name"), { status: 400 });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next.email)) throw Object.assign(new Error("Enter a valid email address"), { status: 400 });
+    next.email = next.email.toLowerCase();
+
+    const changed = BUYER_FIELDS.filter((f) => clean(sale.buyer?.[f]) !== next[f]);
+    if ((sale.buyer?.addressLines || []).join("\n") !== lines.join("\n")) changed.push("address");
+    if (!changed.length) return { sale, changed: [] };
+
+    for (const f of BUYER_FIELDS) sale.set(`buyer.${f}`, next[f] || undefined);
+    sale.set("buyer.addressLines", lines);
+    sale.notes.push({ text: `Buyer details changed (${changed.join(", ")})`, by: admin?._id });
+    await sale.save();
+    return { sale, changed };
+};
+
 export const setBuyerFee = async (saleOrId, fee, note, admin = null) => {
     const sale = saleOrId?.save ? saleOrId : await Sale.findById(saleOrId);
     if (!sale) throw Object.assign(new Error("Sale not found"), { status: 404 });

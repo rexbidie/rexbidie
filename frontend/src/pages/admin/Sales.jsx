@@ -147,6 +147,75 @@ function VatModal({ sale, onClose, onSaved }) {
     );
 }
 
+function BuyerDetailsModal({ sale, onClose, onSaved }) {
+    const b = sale.buyer || {};
+    const [form, setForm] = useState({
+        name: b.name || "",
+        companyName: b.companyName || "",
+        addressLines: (b.addressLines || []).join("\n"),
+        email: b.email || "",
+        phone: b.phone || "",
+        vatNumber: b.vatNumber || "",
+    });
+    const [saving, setSaving] = useState(false);
+    const field = (key) => ({ value: form[key], onChange: (e) => setForm((f) => ({ ...f, [key]: e.target.value })) });
+    const sent = sale.documents?.some((d) => !d.supersededAt);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const { data } = await axiosInstance.patch(`/api/v1/admin/sales/${sale._id}/buyer`, form);
+            toast.success(data.data.changed.length ? "Buyer details updated" : "No changes");
+            onSaved();
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Could not update the buyer details");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const input = "mt-1 w-full border rounded-lg p-2";
+    return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-5 border-b">
+                    <h3 className="text-lg font-semibold">Buyer details · {sale.reference}</h3>
+                    <button onClick={onClose} aria-label="Close"><X size={20} /></button>
+                </div>
+                <div className="p-5 space-y-3 text-sm">
+                    <p className="text-gray-600">
+                        Who this sale&rsquo;s payment request and receipt are made out to, and where its emails go. The buyer&rsquo;s own account isn&rsquo;t changed.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="block"><span className="text-gray-600">Contact name</span><input className={input} {...field("name")} /></label>
+                        <label className="block"><span className="text-gray-600">Company name</span><input className={input} {...field("companyName")} /></label>
+                    </div>
+                    <label className="block">
+                        <span className="text-gray-600">Address (one line each)</span>
+                        <textarea className={input} rows={4} {...field("addressLines")} />
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="block"><span className="text-gray-600">Email</span><input type="email" className={input} {...field("email")} /></label>
+                        <label className="block"><span className="text-gray-600">Phone</span><input className={input} {...field("phone")} /></label>
+                    </div>
+                    <label className="block"><span className="text-gray-600">VAT number (optional)</span><input className={input} {...field("vatNumber")} /></label>
+                    {sent && (
+                        <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
+                            Documents already sent keep the old details. Re-send the payment request (or receipt) afterwards to use the new ones.
+                        </p>
+                    )}
+                </div>
+                <div className="flex justify-end gap-2 p-5 border-t">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+                    <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-white disabled:opacity-50">
+                        {saving ? "Saving…" : "Save buyer details"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function RecordPaymentModal({ sale, onClose, onDone }) {
     const [method, setMethod] = useState("bank_transfer");
     const [amount, setAmount] = useState(String(sale.total));
@@ -511,6 +580,7 @@ function Sales() {
     const selectable = useMemo(() => sales.filter((s) => canSend(s) || canDocs(s) || canPay(s)), [sales]);
     const [matchResult, setMatchResult] = useState(null);
     const [manualSale, setManualSale] = useState(null);
+    const [buyerSale, setBuyerSale] = useState(null);
     const [paySale, setPaySale] = useState(null);
     const [linkSale, setLinkSale] = useState(null);
     const allSelected = selectable.length > 0 && selectable.every((s) => selected.has(s._id));
@@ -906,7 +976,13 @@ function Sales() {
                                                     )}
                                                 </td>
                                                 <td className="p-3 align-top min-w-[160px]">
-                                                    <div>{s.buyer?.name || s.buyer?.username}</div>
+                                                    <div className="flex items-start gap-1">
+                                                        <span>{s.buyer?.name || s.buyer?.username}</span>
+                                                        <button title="Edit buyer details" onClick={() => setBuyerSale(s)} className="p-0.5 text-gray-400 hover:text-gray-700">
+                                                            <Pencil size={12} />
+                                                        </button>
+                                                    </div>
+                                                    {s.buyer?.companyName && s.buyer.companyName !== s.buyer.name && <div className="text-xs text-gray-700">{s.buyer.companyName}</div>}
                                                     <div className="text-xs text-gray-500">{s.buyer?.email}</div>
                                                     {s.buyer?.phone && (
                                                         <a href={`tel:${s.buyer.phone.replace(/\s+/g, "")}`} className="text-xs text-gray-700 block">
@@ -1141,6 +1217,9 @@ function Sales() {
 
             {manualSale && (
                 <ManualPayoutModal sale={manualSale} onClose={() => setManualSale(null)} onDone={() => { setManualSale(null); load(); }} />
+            )}
+            {buyerSale && (
+                <BuyerDetailsModal sale={buyerSale} onClose={() => setBuyerSale(null)} onSaved={() => { setBuyerSale(null); load(); }} />
             )}
 
             {matchResult && (

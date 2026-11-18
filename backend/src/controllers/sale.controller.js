@@ -508,6 +508,16 @@ export const sendCommissionToBank = async (req, res) => {
     }
 };
 
+export const updateBuyerDetails = async (req, res) => {
+    try {
+        const { setBuyerDetails } = await import("../services/saleService.js");
+        const { sale, changed } = await setBuyerDetails(req.params.saleId, req.body || {}, req.user);
+        res.json({ success: true, data: { buyer: sale.buyer, changed } });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
 export const updateBuyerFee = async (req, res) => {
     try {
         const { setBuyerFee } = await import("../services/saleService.js");
