@@ -499,10 +499,28 @@ export const stripeMoney = async (req, res) => {
     }
 };
 
+export const commissionPayments = async (req, res) => {
+    try {
+        const { getCommissionLedger } = await import("../services/commissionLedgerService.js");
+        res.json({ success: true, data: await getCommissionLedger() });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
 export const sendCommissionToBank = async (req, res) => {
     try {
-        const { sendToBank } = await import("../services/stripeMoneyService.js");
-        res.json({ success: true, data: await sendToBank(req.body?.amount, req.user) });
+        const { sendCommission } = await import("../services/commissionLedgerService.js");
+        res.json({ success: true, data: await sendCommission(req.body?.chargeIds, req.user) });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+export const markCommissionSent = async (req, res) => {
+    try {
+        const { markCommissionSent: mark } = await import("../services/commissionLedgerService.js");
+        res.json({ success: true, data: await mark(req.body?.chargeIds, req.body?.note, req.user) });
     } catch (err) {
         fail(res, err);
     }

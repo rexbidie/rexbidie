@@ -143,26 +143,3 @@ export const getStripeMoney = async ({ now = new Date() } = {}) => {
     }));
     return summary;
 };
-
-/** Pays out to RexBid's bank (BOI), never more than is safe to send right now. */
-export const sendToBank = async (amountInput, admin) => {
-    const amount = round2(Number(amountInput));
-    if (!(amount > 0)) throw Object.assign(new Error("Enter an amount to send"), { status: 400 });
-    const { safeToSend } = await getStripeMoney();
-    if (amount > safeToSend) {
-        throw Object.assign(new Error(`Only €${safeToSend.toFixed(2)} is safe to send right now`), { status: 400 });
-    }
-    const cents = Math.round(amount * 100);
-    const payout = await stripe.payouts.create(
-        {
-            amount: cents,
-            currency: "eur",
-            description: "RexBid commission",
-            statement_descriptor: "REXBID COMMISSION",
-            metadata: { source: "stripe_money_page", by: String(admin?._id || "") },
-        },
-        { idempotencyKey: `commission-${cents}-${new Date().toISOString().slice(0, 16)}` },
-    );
-    console.log(`Commission payout ${payout.id}: €${amount} sent to bank`);
-    return { id: payout.id, amount, arrivalDate: new Date(payout.arrival_date * 1000).toISOString(), status: payout.status };
-};
