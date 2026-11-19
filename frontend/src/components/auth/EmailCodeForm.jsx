@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import axios from "axios";
-import { getGaClientId } from "../../utils/ga.js";
+import { getGaClientId, trackEvent } from "../../utils/ga.js";
 import { isNativeApp } from "../../native/platform";
 
 // Enter the 6-digit code emailed at sign-up (backend
@@ -9,11 +9,18 @@ import { isNativeApp } from "../../native/platform";
 // person in and onVerified gets the same response as a login.
 const API = import.meta.env.VITE_DOMAIN_URL;
 
-function EmailCodeForm({ email, onVerified, compact = false }) {
+// `context` tells the GA4 events where the form is shown: "bid_popup" or "verify_page".
+function EmailCodeForm({ email, onVerified, compact = false, context = "verify_page" }) {
     const [code, setCode] = useState("");
     const [busy, setBusy] = useState(false);
     const [wait, setWait] = useState(60); // a code was just sent
     const [error, setError] = useState("");
+
+    // Funnel tracking: how many people reach the code step, fail it, resend, and finish it.
+    useEffect(() => {
+        trackEvent("email_verification_view", { context });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (wait <= 0) return undefined;
@@ -35,8 +42,17 @@ function EmailCodeForm({ email, onVerified, compact = false }) {
                 { email, code, gaClientId: getGaClientId(), rememberMe: isNativeApp },
                 { withCredentials: true }
             );
-            if (data?.success) onVerified(data);
+            if (data?.success) {
+                trackEvent("email_verification_complete", { context });
+                onVerified(data);
+            }
         } catch (err) {
+            const status = err?.response?.status;
+            const serverCode = err?.response?.data?.code;
+            trackEvent("email_verification_error", {
+                context,
+                reason: serverCode ? String(serverCode).toLowerCase() : status === 400 ? "wrong_code" : `http_${status || "network"}`,
+            });
             setError(err?.response?.data?.message || "Something went wrong. Please try again.");
         } finally {
             setBusy(false);
@@ -44,6 +60,7 @@ function EmailCodeForm({ email, onVerified, compact = false }) {
     };
 
     const resend = async () => {
+        trackEvent("email_verification_resend", { context });
         try {
             const { data } = await axios.post(`${API}/api/v1/users/resend-verification`, { email });
             if (data.retryAfter) {

@@ -13,9 +13,15 @@ import { getGaClientId, trackEvent } from '../utils/ga.js';
 import { trackMetaRegistration } from '../utils/metaPixel.js';
 import { isNativeApp } from '../native/platform';
 import EmailCodeForm from './auth/EmailCodeForm';
+import ForgotPasswordModal from './ForgotPasswordModal';
+import { hasAccountOnDevice } from '../utils/accountHint.js';
 
 const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
-    const [activeTab, setActiveTab] = useState('login');
+    // Most people who hit this popup are new, so open on "Create account" unless this
+    // browser has signed in before. Opening on "Log in" sent ~1 in 5 people into a
+    // "no account" / "already exists" error in the first week of tracking.
+    const [activeTab, setActiveTab] = useState(() => (hasAccountOnDevice() ? 'login' : 'register'));
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
     // Email still to confirm with the 6-digit code (after sign-up, or a login before confirming).
     const [verifyEmailFor, setVerifyEmailFor] = useState(null);
     const { setUser } = useAuth();
@@ -46,13 +52,19 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const gateAction = pendingAction?.type || 'bid';
     useEffect(() => {
         if (isOpen) {
-            trackEvent('bid_auth_gate_view', { action: gateAction, auth_tab: activeTab });
+            const initialTab = hasAccountOnDevice() ? 'login' : 'register';
+            setActiveTab(initialTab);
+            trackEvent('bid_auth_gate_view', { action: gateAction, auth_tab: initialTab });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     const handleClose = () => {
-        trackEvent('bid_auth_gate_abandon', { action: gateAction, auth_tab: activeTab });
+        trackEvent('bid_auth_gate_abandon', {
+            action: gateAction,
+            auth_tab: activeTab,
+            stage: verifyEmailFor ? 'email_code' : 'form',
+        });
         onClose();
     };
 
@@ -60,6 +72,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const {
         register: loginRegister,
         handleSubmit: handleLoginSubmit,
+        setValue: loginSetValue,
         formState: { errors: loginErrors },
     } = useForm({ defaultValues: { email: '', password: '' } });
 
@@ -99,7 +112,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             // Account doesn't exist → switch to Register tab, prefill email
             if (/no user found|user.*not.*found|not.*exist/i.test(msg)) {
                 trackEvent('bid_auth_gate_error', { action: gateAction, auth_method: 'login', reason: 'no_account' });
-                toast.error('No user found. Please register.');
+                toast.error('No account with that email yet. Create one below, it only takes a minute.');
                 regSetValue('email', data.email.toLowerCase().trim());
                 regSetValue('password', '');
                 setActiveTab('register');
@@ -201,9 +214,10 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             const msg = err?.response?.data?.message || '';
             if (/already exists/i.test(msg)) {
                 trackEvent('bid_auth_gate_error', { action: gateAction, auth_method: 'register', reason: 'already_exists' });
-                toast.error(msg);
-                regSetValue('email', '');
-                setActiveTab('login');   // ← suggest login
+                toast.error('You already have an account with that email. Log in instead.');
+                loginSetValue('email', data.email.toLowerCase().trim());
+                loginSetValue('password', '');
+                setActiveTab('login');
                 return;
             }
             trackEvent('bid_auth_gate_error', {
@@ -240,16 +254,16 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
 
                 {/* Tabs */}
                 <div className="px-6 mt-4 flex border-b">
-                    {['login', 'register'].map((tab) => (
+                    {[['register', 'Create account'], ['login', 'Log in']].map(([tab, label]) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-4 py-2 text-sm font-semibold capitalize border-b-2 -mb-px ${activeTab === tab
+                            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${activeTab === tab
                                 ? 'border-[#D19F3E] text-[#D19F3E]'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
-                            {tab}
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -261,6 +275,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                             <h3 className="text-lg font-semibold text-[#072342] mb-3">Confirm your email</h3>
                             <EmailCodeForm
                                 compact
+                                context="bid_popup"
                                 email={verifyEmailFor.email}
                                 onVerified={(data) => {
                                     const { user, accessToken, refreshToken } = data.data;
@@ -273,6 +288,12 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                                         if (typeof window.gtag === 'function') window.gtag('event', 'sign_up', { user_type: user.userType, method: 'email' });
                                     }
                                     toast.success(data.message || 'Email confirmed');
+                                    // Account confirmed via the email code: count it as getting through the popup
+                                    trackEvent('bid_auth_gate_complete', {
+                                        action: gateAction,
+                                        auth_method: verifyEmailFor.isNew ? 'register' : 'login',
+                                        via: 'email_code',
+                                    });
                                     setVerifyEmailFor(null);
                                     onAuthSuccess(user);
                                 }}
@@ -303,6 +324,19 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                                 </button>
                             </Field>
                             {loginErrors.password && <p className="text-red-500 text-xs">{loginErrors.password.message}</p>}
+
+                            <div className="text-right -mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        trackEvent('bid_auth_gate_forgot_password', { action: gateAction });
+                                        setShowForgotPassword(true);
+                                    }}
+                                    className="text-sm font-medium text-[#A17B35] underline"
+                                >
+                                    Forgot password?
+                                </button>
+                            </div>
 
                             <button
                                 type="submit"
@@ -496,6 +530,8 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                     )}
                 </div>
             </div>
+            {/* Rendered inside this popup's layer so it shows on top of it */}
+            <ForgotPasswordModal isOpen={showForgotPassword} onClose={() => setShowForgotPassword(false)} />
         </div>
     );
 };

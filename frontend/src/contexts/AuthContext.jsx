@@ -2,6 +2,7 @@ import axios from 'axios';
 import { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { getGaClientId } from '../utils/ga.js';
+import { markHasAccount } from '../utils/accountHint.js';
 import { syncMetaUser } from '../utils/metaPixel.js';
 import { unregisterPush } from '../native/push';
 import { isNativeApp } from '../native/platform';
@@ -23,6 +24,11 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         checkAuth();
     }, []);
+
+    // Remember this browser has an account, so the bid popup opens on "Log in" next time.
+    useEffect(() => {
+        if (user) markHasAccount();
+    }, [user]);
 
     // Keep Meta advanced matching in step with who is signed in
     // (only used once the visitor accepts advertising cookies).
