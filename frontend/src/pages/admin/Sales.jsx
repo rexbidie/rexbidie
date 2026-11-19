@@ -301,6 +301,103 @@ function RefundModal({ sale, onClose, onDone }) {
     );
 }
 
+const copyText = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        window.prompt("Copy this link:", text);
+        return false;
+    }
+};
+
+const copyPayoutLink = async (sale) => {
+    try {
+        const { data } = await axiosInstance.get(`/api/v1/admin/sales/${sale._id}/payout-setup-link`);
+        if (await copyText(data.data.url)) toast.success(`Payout setup link copied (works for ${data.data.days} days, no sign-in needed)`);
+    } catch (err) {
+        toast.error(err.response?.data?.message || "Couldn't make the link");
+    }
+};
+
+function ChangeSellerModal({ sale, onClose, onSaved }) {
+    const [form, setForm] = useState({ name: "", email: "", phone: "", companyName: "", updateListing: true });
+    const [saving, setSaving] = useState(false);
+    const [result, setResult] = useState(null);
+    const field = (key) => ({ value: form[key], onChange: (e) => setForm((f) => ({ ...f, [key]: e.target.value })) });
+    const input = "mt-1 w-full border rounded-lg p-2";
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const { data } = await axiosInstance.post(`/api/v1/admin/sales/${sale._id}/seller`, form);
+            setResult(data.data);
+            toast.success(data.data.changed ? `Seller changed${data.data.created ? " (account created for them)" : ""}` : "That's already the seller");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Couldn't change the seller");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-5 border-b">
+                    <h3 className="text-lg font-semibold">Change seller · {sale.reference}</h3>
+                    <button onClick={result ? onSaved : onClose} aria-label="Close"><X size={20} /></button>
+                </div>
+                {result ? (
+                    <div className="p-5 space-y-4 text-sm">
+                        <p>
+                            <strong>{result.seller.companyName || result.seller.name}</strong> is now the seller.
+                            {result.created && " A RexBid seller account was created for them in the background; they don't need to sign in."}
+                        </p>
+                        <p>Send them this link to set up their payouts. It goes straight to Stripe (no RexBid sign-in) and works for {result.linkDays} days:</p>
+                        <div className="flex gap-2">
+                            <input readOnly value={result.payoutSetupLink} className="flex-1 border rounded-lg p-2 text-xs font-mono" onFocus={(e) => e.target.select()} />
+                            <button onClick={async () => { if (await copyText(result.payoutSetupLink)) toast.success("Copied"); }} className="px-3 rounded-lg border">Copy</button>
+                        </div>
+                        <p className="text-xs text-gray-500">Or use the send payout setup link button on the Sales page to email it from the site.</p>
+                    </div>
+                ) : (
+                    <div className="p-5 space-y-3 text-sm">
+                        <p className="text-gray-600">
+                            Now: <strong>{sale.seller?.companyName || sale.seller?.name || "unknown"}</strong>. Enter the real seller. If their email already has a
+                            RexBid account it&rsquo;s used; if not, a seller account is created for them in the background.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block"><span className="text-gray-600">Name</span><input className={input} {...field("name")} /></label>
+                            <label className="block"><span className="text-gray-600">Company (optional)</span><input className={input} {...field("companyName")} /></label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block"><span className="text-gray-600">Email</span><input type="email" className={input} {...field("email")} /></label>
+                            <label className="block"><span className="text-gray-600">Phone</span><input className={input} {...field("phone")} /></label>
+                        </div>
+                        <label className="flex items-center gap-2">
+                            <input type="checkbox" checked={form.updateListing} onChange={(e) => setForm((f) => ({ ...f, updateListing: e.target.checked }))} />
+                            Also make them the seller on the listing (so it shows in their My Listings)
+                        </label>
+                        <p className="text-xs text-gray-500">Check the VAT decision afterwards if the new seller is VAT-registered or in a different region.</p>
+                    </div>
+                )}
+                <div className="flex justify-end gap-2 p-5 border-t">
+                    {result ? (
+                        <button onClick={onSaved} className="px-4 py-2 rounded-lg bg-primary text-white">Done</button>
+                    ) : (
+                        <>
+                            <button onClick={onClose} className="px-4 py-2 rounded-lg border">Cancel</button>
+                            <button onClick={save} disabled={saving || !form.email.trim()} className="px-4 py-2 rounded-lg bg-primary text-white disabled:opacity-50">
+                                {saving ? "Saving…" : "Change seller"}
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function RecordPaymentModal({ sale, onClose, onDone }) {
     const [method, setMethod] = useState("bank_transfer");
     const [amount, setAmount] = useState(String(sale.total));
@@ -668,6 +765,7 @@ function Sales() {
     const [buyerSale, setBuyerSale] = useState(null);
     const [paySale, setPaySale] = useState(null);
     const [refundSale, setRefundSale] = useState(null);
+    const [sellerSale, setSellerSale] = useState(null);
     const [linkSale, setLinkSale] = useState(null);
     const allSelected = selectable.length > 0 && selectable.every((s) => selected.has(s._id));
     const chosen = useMemo(() => sales.filter((s) => selected.has(s._id)), [sales, selected]);
@@ -1101,7 +1199,19 @@ function Sales() {
                                                     ) : null}
                                                 </td>
                                                 <td className="p-3 align-top min-w-[140px]">
-                                                    <div>{s.seller?.companyName || s.seller?.name || s.seller?.username}</div>
+                                                    <div className="flex items-start gap-1">
+                                                        <span>{s.seller?.companyName || s.seller?.name || s.seller?.username}</span>
+                                                        {s.status !== "paid_out" && (
+                                                            <button title="Change seller" onClick={() => setSellerSale(s)} className="p-0.5 text-gray-400 hover:text-gray-700">
+                                                                <Pencil size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {s.status !== "paid_out" && s.sellerPayout?.state !== "ready" && (
+                                                        <button onClick={() => copyPayoutLink(s)} className="text-[11px] text-blue-700 underline" title="Link straight to Stripe, no sign-in needed">
+                                                            Copy payout setup link
+                                                        </button>
+                                                    )}
                                                     {s.seller?.phone && (
                                                         <a href={`tel:${s.seller.phone.replace(/\s+/g, "")}`} className="text-xs text-gray-700 block">
                                                             {s.seller.phone}
@@ -1309,6 +1419,7 @@ function Sales() {
 
             {linkSale && <LinkStripeAccountModal sale={linkSale} onClose={() => setLinkSale(null)} onDone={() => { setLinkSale(null); load(); }} />}
 
+            {sellerSale && <ChangeSellerModal sale={sellerSale} onClose={() => setSellerSale(null)} onSaved={() => { setSellerSale(null); load(); }} />}
             {refundSale && <RefundModal sale={refundSale} onClose={() => setRefundSale(null)} onDone={() => { setRefundSale(null); load(); }} />}
             {paySale && <RecordPaymentModal sale={paySale} onClose={() => setPaySale(null)} onDone={() => { setPaySale(null); load(); }} />}
 
