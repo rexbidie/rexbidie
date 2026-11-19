@@ -25,6 +25,7 @@ const OWNER_ONLY_FIELDS = [
   "featuredRequested",
   "notifications",
   "purchaseEventSent",
+  "retractedBids",
 ];
 
 // Fields only the seller, admins and the winning buyer may see.
@@ -180,7 +181,7 @@ export const sanitizeAuctionsForViewer = (list, viewer = null) =>
  */
 export const toCardView = (auction) => {
   if (!auction) return auction;
-  const { bids, offers, proxyBids, participants, extrasPayment, promotions, pendingEdit, notifications, ...rest } = auction;
+  const { bids, offers, proxyBids, participants, extrasPayment, promotions, pendingEdit, notifications, retractedBids, ...rest } = auction;
   const photos = Array.isArray(auction.photos) ? auction.photos : [];
   return { ...rest, photos: photos.slice(0, 1), photoCount: photos.length };
 };

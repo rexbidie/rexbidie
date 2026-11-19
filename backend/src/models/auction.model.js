@@ -374,6 +374,28 @@ const auctionSchema = new Schema(
       maxBidPerUser: { type: Number, default: 1 },
       autoIncrease: { type: Boolean, default: true },
     },
+    // Bids an admin retracted before the lot closed (services/bidRetractionService.js).
+    // Seller and admins only (utils/publicAuction.js).
+    retractedBids: [
+      {
+        bidder: { type: Schema.Types.ObjectId, ref: "User" },
+        bidderUsername: String,
+        bids: [
+          {
+            _id: false,
+            amount: Number,
+            timestamp: Date,
+            isProxyBid: { type: Boolean, default: false },
+          },
+        ],
+        proxyMaxAmount: { type: Number, default: null },
+        reason: { type: String, default: "" },
+        priceBefore: Number,
+        priceAfter: Number,
+        retractedBy: { type: Schema.Types.ObjectId, ref: "User" },
+        retractedAt: { type: Date, default: Date.now },
+      },
+    ],
 
     isFeatured: {
       type: Boolean,

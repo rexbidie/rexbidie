@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Calendar, Download, BarChart3, User, Gavel, Award, Clock, Banknote, Users, TrendingUp, Package } from "lucide-react";
+import { Search, Filter, Calendar, Download, BarChart3, User, Gavel, Award, Clock, Banknote, Users, TrendingUp, Package, Undo2 } from "lucide-react";
 import axiosInstance from "../../utils/axiosInstance.js";
 import { toast } from "react-hot-toast";
 import { AdminContainer, AdminHeader, AdminSidebar } from "../../components/index.js";
@@ -24,6 +24,37 @@ function BidHistory() {
 
     const { user } = useAuth();
     const userCurrency = user?.currency || 'EUR';
+    const [retractingBidder, setRetractingBidder] = useState(null);
+
+    // Retract every bid a bidder has on a live lot (e.g. they withdrew before close).
+    const handleRetract = async (auction, bidder) => {
+        const name = bidder.name || bidder.username || "this bidder";
+        const reason = window.prompt(
+            `Retract ALL of ${name}'s bids on "${auction.title}"?\n\n` +
+            `Their proxy (max) bid will also be switched off and the price will drop back. This can't be undone.\n\n` +
+            `Reason (kept on record):`,
+            "Bidder withdrew bid before close (s.58(2) Sale of Goods Act 1893)"
+        );
+        if (reason === null) return;
+
+        setRetractingBidder(bidder.id);
+        try {
+            const { data } = await axiosInstance.post(
+                `/api/v1/bids/admin/auctions/${auction.id}/retract`,
+                { bidderId: bidder.id, reason }
+            );
+            toast.success(data.message || "Bids retracted");
+            const { data: history } = await axiosInstance.get(`/api/v1/bids/admin/history?currency=${userCurrency}`);
+            if (history.success) {
+                setAllAuctions(history.data.auctions);
+                setSelectedAuction(history.data.auctions.find(a => a.id === auction.id) || null);
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to retract bids");
+        } finally {
+            setRetractingBidder(null);
+        }
+    };
 
     // Fetch all data once on component mount
     const fetchAllData = async () => {
@@ -449,6 +480,9 @@ function BidHistory() {
                                                         <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                                         <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                                                         <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                                        {selectedAuction.status === 'active' && (
+                                                            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                                        )}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
@@ -481,11 +515,44 @@ function BidHistory() {
                                                             <td className="py-3 px-4">
                                                                 {getStatusBadge(bid.status)}
                                                             </td>
+                                                            {selectedAuction.status === 'active' && (
+                                                                <td className="py-3 px-4">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRetract(selectedAuction, bid.bidder)}
+                                                                        disabled={!!retractingBidder}
+                                                                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                                                                        title="Retract all of this bidder's bids on this lot"
+                                                                    >
+                                                                        <Undo2 size={14} />
+                                                                        {retractingBidder === bid.bidder.id ? 'Retracting…' : 'Retract'}
+                                                                    </button>
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
+
+                                        {selectedAuction.retractions?.length > 0 && (
+                                            <div className="mt-6">
+                                                <h4 className="text-sm font-semibold text-gray-700 mb-2">Retracted bids</h4>
+                                                <ul className="space-y-2">
+                                                    {selectedAuction.retractions.map((r, i) => (
+                                                        <li key={i} className="text-sm bg-red-50 border border-red-100 rounded-lg p-3">
+                                                            <div className="font-medium text-gray-900">
+                                                                @{r.bidderUsername} · {r.bidCount} bid{r.bidCount === 1 ? '' : 's'} (highest {formatCurrency(r.convertedHighestBid)})
+                                                            </div>
+                                                            <div className="text-xs text-gray-600">
+                                                                {formatDate(r.retractedAt)} {formatTime(r.retractedAt)} · price {formatCurrency(r.convertedPriceBefore)} → {formatCurrency(r.convertedPriceAfter)}
+                                                            </div>
+                                                            {r.reason && <div className="text-xs text-gray-600 mt-1">{r.reason}</div>}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ) : (

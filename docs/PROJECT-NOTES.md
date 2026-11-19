@@ -75,6 +75,19 @@ The backend needs **Node 20.9 or newer** (`engines` in `backend/package.json`; r
 
 ---
 
+## 3f. Retracting a bid (admin)
+
+A bidder may withdraw a bid until the lot closes (s.58(2) Sale of Goods Act 1893). **Admin → Bid History**, pick the
+live lot, press *Retract* on any of the bidder's rows and give a reason. This removes **all** that bidder's bids on the lot,
+switches off their proxy bid, and drops the price back. Other bidders' proxy bids that were only raised to compete with
+the retracted bidder are taken out and re-bid by the normal proxy cascade, so nobody is left paying an inflated price.
+Each retraction is kept in `auction.retractedBids` (seller and admins only). Only live lots before the end time; no
+emails are sent, so reply to the bidder yourself.
+Code: `backend/src/utils/bidRetraction.js` (rules), `services/bidRetractionService.js`,
+`POST /api/v1/bids/admin/auctions/:auctionId/retract` `{ bidderId, reason }`. Tests: `test/bidRetraction.test.js`.
+
+---
+
 ## 3e. iPhone & Android app (Nov 2026)
 
 The app is the website's React code in a Capacitor shell (`frontend/ios`, `frontend/android`),
