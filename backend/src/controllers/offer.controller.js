@@ -1,6 +1,12 @@
 import Auction from "../models/auction.model.js";
 import User from "../models/user.model.js";
 import { publicName } from "../utils/displayName.js";
+import { sanitizeAuctionForViewer } from "../utils/publicAuction.js";
+
+// Buyer-facing responses must not include the reserve, other buyers' offers/contact
+// details or proxy maximums (utils/publicAuction.js). Sellers and admins still see all.
+const forViewer = (auction, viewer) =>
+    sanitizeAuctionForViewer(auction?.toObject ? auction.toObject({ flattenMaps: true }) : auction, viewer);
 import { getCachedRates } from "../routes/currency.route.js";
 import {
   auctionWonAdminEmail,
@@ -260,7 +266,7 @@ export const makeOffer = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Offer submitted successfully",
-      data: { auction: convertedAuction },
+      data: { auction: forViewer(convertedAuction, req.user) },
     });
 
     offerConfirmationEmail(
@@ -355,7 +361,7 @@ export const buyerCounterOffer = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Counter offer sent to seller",
-      data: { auction: updatedAuction },
+      data: { auction: forViewer(updatedAuction, req.user) },
     });
 
     // Email seller (non-blocking) — reuse your existing newOfferNotificationEmail
@@ -858,7 +864,7 @@ export const acceptCounterOffer = async (req, res) => {
       message:
         "Counter offer accepted successfully! Auction is now sold to you.",
       data: {
-        auction: updatedAuction,
+        auction: forViewer(updatedAuction, req.user),
       },
     });
   } catch (error) {
@@ -952,7 +958,7 @@ export const withdrawOffer = async (req, res) => {
       success: true,
       message: "Offer withdrawn successfully",
       data: {
-        auction: updatedAuction,
+        auction: forViewer(updatedAuction, req.user),
       },
     });
   } catch (error) {
