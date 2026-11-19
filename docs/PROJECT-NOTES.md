@@ -77,7 +77,7 @@ The backend needs **Node 20.9 or newer** (`engines` in `backend/package.json`; r
 
 ## 3f. Retracting a bid (admin)
 
-A bidder may withdraw a bid until the lot closes (s.58(2) Sale of Goods Act 1893). **Admin → Bid History**, pick the
+A bidder may withdraw a bid until the lot closes (s.58(2) Sale of Goods Act 1893). **Admin → Bids**, pick the
 live lot, press *Retract* on any of the bidder's rows and give a reason. This removes **all** that bidder's bids on the lot,
 switches off their proxy bid, and drops the price back. Other bidders' proxy bids that were only raised to compete with
 the retracted bidder are taken out and re-bid by the normal proxy cascade, so nobody is left paying an inflated price.
@@ -85,6 +85,10 @@ Each retraction is kept in `auction.retractedBids` (seller and admins only). Onl
 emails are sent, so reply to the bidder yourself.
 Code: `backend/src/utils/bidRetraction.js` (rules), `services/bidRetractionService.js`,
 `POST /api/v1/bids/admin/auctions/:auctionId/retract` `{ bidderId, reason }`. Tests: `test/bidRetraction.test.js`.
+
+**Admin → Bids page** (`/admin/bids`): filters, sorting and paging run on the server
+(`GET /api/v1/bids/admin/history?page&limit&status&seller&search&sortBy`, 25 lots a page, max 100). Search matches lot
+title or ID, and seller or bidder name, username, company or email. Lots whose bids were all retracted stay listed.
 
 ---
 
