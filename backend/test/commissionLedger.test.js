@@ -67,3 +67,12 @@ test("over €15,000: no Connect fees, and the seller's share goes to BOI too (t
     assert.equal(viaConnect.sellerViaBank, false);
     assert.equal(viaConnect.toSend, viaConnect.rexbidShare);
 });
+
+test("a buyer who paid less than the sale total is flagged", () => {
+    const c = [ch("ch_short", 47700, "ts", { payment_intent: "pi_short" })];
+    const b = [bt("ts", 47700, 911, CLEARED)];
+    const s = [{ _id: "SS", reference: "NEW-1", title: "Buckets", status: "paid", currency: "EUR", itemPrice: 450, vat: { amount: 103.5 }, sellerFee: 0, buyerFee: 27, total: 580.5, payment: { transactionId: "pi_short" } }];
+    const r = buildLedger({ charges: c, balanceTxns: b, sales: s, transfers: [], now: NOW }).rows[0];
+    assert.equal(r.shortfall, 103.5);
+    assert.equal(r.toSend, 0);
+});

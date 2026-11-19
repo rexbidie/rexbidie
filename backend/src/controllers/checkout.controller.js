@@ -142,7 +142,11 @@ export const getCheckoutData = async (req, res) => {
         const convertedFinalPrice = convertAmount(auction.finalPrice || auction.currentPrice, auction);
         const convertedBidderCommission = convertAmount(auction.bidderCommissionAmount || 0, auction);
         const convertedSellerCommission = convertAmount(auction.sellerCommissionAmount || 0, auction);
-        const convertedTotalAmount = convertedFinalPrice + convertedBidderCommission;
+        // VAT, worked out as on the Sales page (and charged at checkout).
+        const { checkoutFiguresFor } = await import("../services/saleService.js");
+        const figures = await checkoutFiguresFor(auction._id).catch(() => null);
+        const convertedVat = convertAmount(figures?.vatAmount || 0, auction);
+        const convertedTotalAmount = figures ? convertAmount(figures.total, auction) : convertedFinalPrice + convertedBidderCommission;
 
 
         // Prepare auction data for response with converted amounts
@@ -164,6 +168,11 @@ export const getCheckoutData = async (req, res) => {
             status: auction.status,
             paymentStatus: auction.paymentStatus,
             vatIncluded: auction.vatIncluded,
+            vatAmount: convertedVat,
+            vatRate: figures?.vatRate || 0,
+            vatTreatment: figures?.vatTreatment || "not_applicable",
+            vatReviewRequired: !!figures?.reviewRequired,
+            totalAmount: convertedTotalAmount,
             paymentCollectionPreference: auction.paymentCollectionPreference,
             baseCurrency: auction.baseCurrency,
             displayCurrency: userCurrency,
