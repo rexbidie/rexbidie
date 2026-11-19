@@ -32,6 +32,7 @@ import {
     stripeMoney,
     sendCommissionToBank,
     commissionPayments,
+    accountsPack,
     markCommissionSent,
     updateBuyerDetails,
     changeSeller,
@@ -44,6 +45,7 @@ export const adminSaleRouter = Router();
 adminSaleRouter.get("/", authAdmin, listSales);
 adminSaleRouter.get("/stripe-money", authAdmin, stripeMoney);
 adminSaleRouter.get("/stripe-money/payments", authAdmin, commissionPayments);
+adminSaleRouter.get("/stripe-money/accounts", authAdmin, accountsPack);
 adminSaleRouter.post("/stripe-money/send-commission", authAdmin, sendCommissionToBank);
 adminSaleRouter.post("/stripe-money/mark-sent", authAdmin, markCommissionSent);
 adminSaleRouter.post("/sync", authAdmin, runSync);
