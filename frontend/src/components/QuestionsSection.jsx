@@ -14,15 +14,6 @@ import { useAuth } from "../contexts/AuthContext";
 const QUESTION_MAX = 600;
 const ANSWER_MAX = 1500;
 
-const QUICK_QUESTIONS = [
-    "Does it start and run well?",
-    "How many hours are on it, and are they genuine?",
-    "Are there any known faults, leaks or repairs needed?",
-    "When was it last serviced?",
-    "Can I view it before the auction ends?",
-    "Is there a service history or paperwork with it?",
-];
-
 const looksLikeContactDetails = (text) => {
     const t = String(text || "");
     const digits = (t.match(/\+?\d[\d\s().-]{5,}\d/g) || []).some((r) => r.replace(/\D/g, "").length >= 7 && /^(\+|0)/.test(r.trim()));
@@ -273,11 +264,6 @@ const QuestionsSection = ({ auctionId, onCountChange }) => {
         }
     };
 
-    const pickQuick = (question) => {
-        setText(question);
-        inputRef.current?.focus();
-    };
-
     if (loading) {
         return (
             <div className="flex items-center gap-2 text-gray-500 py-6">
@@ -326,18 +312,6 @@ const QuestionsSection = ({ auctionId, onCountChange }) => {
                 user ? (
                     <form onSubmit={ask} className="mb-6 rounded-lg border border-gray-200 p-4 bg-white">
                         <label htmlFor="qa-ask" className="block font-medium text-gray-900 mb-2">Ask the seller a question</label>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                            {QUICK_QUESTIONS.map((qq) => (
-                                <button
-                                    key={qq}
-                                    type="button"
-                                    onClick={() => pickQuick(qq)}
-                                    className="text-xs px-3 py-1.5 rounded-full border border-gray-300 text-gray-700 hover:border-black hover:text-black"
-                                >
-                                    {qq}
-                                </button>
-                            ))}
-                        </div>
                         <textarea
                             id="qa-ask"
                             ref={inputRef}
