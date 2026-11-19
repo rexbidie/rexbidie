@@ -689,6 +689,14 @@ class AgendaService {
     await this.agenda.cancel({ name: "end post-auction buy it now", "data.auctionId": auctionId });
   }
 
+  // Move a lot's closing job to a new time (anti-sniping ripple). Only the
+  // "end auction" job: a lot that hasn't started keeps its start job.
+  async rescheduleAuctionEnd(auctionId, endDate) {
+    const id = String(auctionId);
+    await this.agenda.cancel({ name: "end auction", "data.auctionId": { $in: [auctionId, id] } });
+    await this.agenda.schedule(endDate, "end auction", { auctionId: id });
+  }
+
   // Cancel jobs if auction is deleted or modified
   async cancelAuctionJobs(auctionId) {
     await this.agenda.cancel({

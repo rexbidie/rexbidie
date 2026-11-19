@@ -38,14 +38,18 @@ test("users without a card are never remembered", () => {
   assert.equal(paymentRecentlyVerified({ _id: "u2" }), false);
 });
 
-test("Buyer Terms: asked once per Irish calendar day", () => {
-  const evening = new Date("2026-11-17T19:00:00Z"); // 19:00 in Dublin
-  const later = new Date("2026-11-17T22:30:00Z");
-  const nextDay = new Date("2026-11-18T19:00:00Z");
-  const u = { buyerTerms: { acceptedAt: evening } };
-  assert.equal(buyerTermsCurrent(u, later), true);
-  assert.equal(buyerTermsCurrent(u, nextDay), false);
-  assert.equal(buyerTermsCurrent({}, later), false);
+test("Buyer Terms: asked every 30 minutes, but never in the lot's last 10 minutes", () => {
+  const agreed = new Date("2026-11-19T20:30:00Z");
+  const u = { buyerTerms: { acceptedAt: agreed } };
+  const at = (min) => new Date(agreed.getTime() + min * 60000);
+  assert.equal(buyerTermsCurrent(u, at(29)), true);
+  assert.equal(buyerTermsCurrent(u, at(31)), false);
+  // 31 minutes on, but the lot closes in 8 minutes: don't ask.
+  assert.equal(buyerTermsCurrent(u, at(31), { lotEndsAt: at(39) }), true);
+  // Lot closes in 12 minutes: ask.
+  assert.equal(buyerTermsCurrent(u, at(31), { lotEndsAt: at(43) }), false);
+  // Never agreed at all: always ask, even near the end.
+  assert.equal(buyerTermsCurrent({}, at(1), { lotEndsAt: at(5) }), false);
 });
 
 test("Buyer Terms: once per account when BUYER_TERMS_EVERY_NIGHT=false", () => {

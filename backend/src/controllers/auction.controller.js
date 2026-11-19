@@ -2563,7 +2563,8 @@ export const placeBidDirect = async (
         const timeRemaining = auction.endDate - now;
         if (timeRemaining < 2 * 60 * 1000) {
           const newEndDate = new Date(auction.endDate.getTime() + 1 * 60 * 1000);
-          update.$set.endDate = newEndDate;
+          // $max: never pull the time back if the lot was just moved later (anti-sniping ripple).
+          update.$max = { endDate: newEndDate };
           extended = true;
         }
       }
@@ -2586,6 +2587,9 @@ export const placeBidDirect = async (
       if (extended) {
         await agendaService.cancelAuctionJobs(auctionId);
         await agendaService.scheduleAuctionEnd(auctionId, updatedAuction.endDate);
+        // Push back later lots that night that would now close too soon after it.
+        const { rippleAfterExtension } = await import("../services/saleNightService.js");
+        rippleAfterExtension(auctionId, auction.endDate, updatedAuction.endDate);
       }
 
       return updatedAuction;

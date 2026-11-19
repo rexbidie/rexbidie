@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.jsx';
 import RouteSeo from './components/RouteSeo';
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { PopUpContextProvider } from './contexts/PopUpContextProvider';
 import { Protected, LoadingSpinner, AdminRoute } from './components';
 import { AuthProvider } from './contexts/AuthContext.jsx';
@@ -24,6 +24,18 @@ const SellerAgreement = lazy(() => import('./pages/SellerAgreement'));
 const BuyerAgreement = lazy(() => import('./pages/BuyerAgreement'));
 const BuyerTerms = lazy(() => import('./pages/BuyerTerms'));
 const SingleAuction = lazy(() => import('./pages/SingleAuction'));
+import NextLotAdvance from './components/bidding/NextLotAdvance';
+// A fresh page for each lot, so moving to the next lot (sale night) never shows the last lot's details.
+// Sale night: the "next lot in 5…" panel sits outside the page so a reload can't reset it.
+const SingleAuctionKeyed = () => {
+    const { id } = useParams();
+    return (
+        <>
+            <NextLotAdvance key={`next-${id}`} auctionId={id} />
+            <SingleAuction key={id} />
+        </>
+    );
+};
 const Featured = lazy(() => import('./pages/Featured'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const PayoutSetup = lazy(() => import('./pages/PayoutSetup'));
@@ -167,7 +179,7 @@ createRoot(document.getElementById('root')).render(
 
                         <Route path='/checkout/:auctionId' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><Checkout /></Suspense>} />
 
-                        <Route path='/auction/:id' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><SingleAuction /></Suspense>} />
+                        <Route path='/auction/:id' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><SingleAuctionKeyed /></Suspense>} />
 
                         <Route path='/privacy-policy' element={<Suspense fallback={<LoadingSpinner height={'725px'} />}><PrivacyPolicy /></Suspense>} />
 

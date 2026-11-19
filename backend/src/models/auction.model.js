@@ -719,9 +719,11 @@ auctionSchema.methods.placeBid = async function (
   }
 
   // Auto-extend if bidding near end time (last 1 minute)
+  let extendedFrom = null;
   if (this.autoExtend) {
     const timeRemaining = this.endDate - now;
     if (timeRemaining < 2 * 60 * 1000) {
+      extendedFrom = new Date(this.endDate);
       const newEndDate = new Date(this.endDate.getTime() + 1 * 60 * 1000);
       this.endDate = newEndDate;
       await agendaService.cancelAuctionJobs(this._id);
@@ -730,7 +732,14 @@ auctionSchema.methods.placeBid = async function (
   }
 
   try {
-    return await this.save();
+    const saved = await this.save();
+    // Push back later lots that night that would now close too soon after it.
+    if (extendedFrom) {
+      import("../services/saleNightService.js")
+        .then(({ rippleAfterExtension }) => rippleAfterExtension(this._id, extendedFrom, this.endDate))
+        .catch((e) => console.error("Anti-sniping ripple failed:", e));
+    }
+    return saved;
   } catch (err) {
     if (err?.name === "DocumentNotFoundError" || err?.name === "VersionError") {
       throw new Error("This lot has just changed. Please refresh the page and try again.");
