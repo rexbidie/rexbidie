@@ -2425,7 +2425,9 @@ export const placeBid = async (req, res) => {
       success: true,
       message: "Bid placed successfully",
       data: {
-        auction: {
+        // Sanitised like every other public response: no reserve, no other bidders'
+        // proxy maximums or offers, no seller/leader email.
+        auction: sanitizeAuctionForViewer({
           ...auctionObj,
           bids: convertedBids,
           convertedStartPrice,
@@ -2435,7 +2437,7 @@ export const placeBid = async (req, res) => {
           convertedReservePrice,
           convertedFinalPrice,
           displayCurrency: userCurrency,
-        },
+        }, req.user),
         extended,
       },
     });
@@ -2506,7 +2508,10 @@ export const placeBid = async (req, res) => {
  */
 export const placeBidDirect = async (
   auctionId, bidderId, bidderUsername, amount,
-  proxyBidId = null, maxRetries = 3
+  proxyBidId = null, maxRetries = 3,
+  // raiseOwnBid: let the current leader's proxy raise their own price
+  // (used to lift a leading proxy up to the reserve, services/proxyBidService.js).
+  { raiseOwnBid = false } = {}
 ) => {
   let attempt = 0, lastError = null;
 
@@ -2518,14 +2523,19 @@ export const placeBidDirect = async (
       if (!auction || auction.status !== "active")
         throw new Error("Auction not active or not found");
 
-      if (auction.currentBidder?.toString() === bidderId.toString()) {
+      const isLeader = auction.currentBidder?.toString() === bidderId.toString();
+      if (isLeader && !raiseOwnBid) {
         return auction; // already winning
       }
 
-      const minBid = auction.bidCount === 0
-        ? auction.startPrice
-        : auction.currentPrice + auction.bidIncrement;
-      if (amount < minBid) throw new Error(`Bid must be at least ${minBid}`);
+      if (isLeader) {
+        if (amount <= auction.currentPrice) return auction; // nothing to raise
+      } else {
+        const minBid = auction.bidCount === 0
+          ? auction.startPrice
+          : auction.currentPrice + auction.bidIncrement;
+        if (amount < minBid) throw new Error(`Bid must be at least ${minBid}`);
+      }
 
       const now = new Date();
       const update = {
@@ -2564,7 +2574,8 @@ export const placeBidDirect = async (
         if (timeRemaining < 2 * 60 * 1000) {
           const newEndDate = new Date(auction.endDate.getTime() + 1 * 60 * 1000);
           // $max: never pull the time back if the lot was just moved later (anti-sniping ripple).
-          update.$max = { endDate: newEndDate };
+          // Add to $max (don't replace it) so the bid-increment floor above still applies.
+          update.$max.endDate = newEndDate;
           extended = true;
         }
       }
@@ -3877,7 +3888,7 @@ export const buyNow = async (req, res) => {
       success: true,
       message: successMessage,
       data: {
-        auction: updatedAuction,
+        auction: sanitizeAuctionForViewer(updatedAuction.toObject({ flattenMaps: true }), req.user),
       },
     });
 
