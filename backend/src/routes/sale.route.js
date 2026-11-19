@@ -31,6 +31,8 @@ import {
     refundBuyer,
     stripeMoney,
     sendCommissionToBank,
+    commissionPayments,
+    markCommissionSent,
     updateBuyerDetails,
     importFees,
 } from "../controllers/sale.controller.js";
@@ -39,7 +41,9 @@ import {
 export const adminSaleRouter = Router();
 adminSaleRouter.get("/", authAdmin, listSales);
 adminSaleRouter.get("/stripe-money", authAdmin, stripeMoney);
-adminSaleRouter.post("/stripe-money/send-to-bank", authAdmin, sendCommissionToBank);
+adminSaleRouter.get("/stripe-money/payments", authAdmin, commissionPayments);
+adminSaleRouter.post("/stripe-money/send-commission", authAdmin, sendCommissionToBank);
+adminSaleRouter.post("/stripe-money/mark-sent", authAdmin, markCommissionSent);
 adminSaleRouter.post("/sync", authAdmin, runSync);
 adminSaleRouter.post("/issue-payment-requests", authAdmin, issuePaymentRequests);
 adminSaleRouter.post("/issue-documents", authAdmin, issueDocuments);
