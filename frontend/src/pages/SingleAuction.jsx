@@ -51,8 +51,8 @@ function SingleAuction() {
     const [isBidModalOpen, setIsBidModalOpen] = useState(false);
     const formRef = useRef();
     const { user } = useAuth();
-    // Buyer Terms: ticked once per auction night, then one-tap bids.
-    const buyerTerms = useBuyerTerms(user);
+    // Buyer Terms: ticked every 30 minutes (never in this lot's last 10), then one-tap bids.
+    const buyerTerms = useBuyerTerms(user, auction?.endDate);
     const [confirmingBid, setConfirmingBid] = useState(false);
     const bidInFlightRef = useRef(false);
     // Only a genuine 404 marks the page noindex; a temporary API error must not.

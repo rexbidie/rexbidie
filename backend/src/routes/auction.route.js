@@ -85,6 +85,18 @@ auctionRouter.post('/:id/featured', authSeller, markAsFeatured);
 auctionRouter.get('/', getAuctions);
 auctionRouter.get('/hot', getHotListing);
 auctionRouter.get('/featured', getFeaturedListings);
+// Sale night: the lot that closes next, for moving the listing page on.
+auctionRouter.get('/:id/next-lot', async (req, res) => {
+    try {
+        const { nextLotAfter } = await import('../services/saleNightService.js');
+        const data = await nextLotAfter(req.params.id);
+        if (!data) return res.status(404).json({ success: false, message: 'Lot not found' });
+        res.json({ success: true, data });
+    } catch (err) {
+        console.error('Next lot error:', err);
+        res.status(500).json({ success: false, message: 'Could not find the next lot' });
+    }
+});
 auctionRouter.get('/:id', optionalAuth, getAuction);
 auctionRouter.get('/:id/commission', auth, getAuctionCommission);
 

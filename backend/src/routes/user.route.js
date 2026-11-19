@@ -32,7 +32,7 @@ import { auth, optionalAuth } from "../middlewares/auth.middleware.js";
 import { deleteMyAccount, deletionCheck } from "../controllers/accountDeletion.controller.js";
 import mongoose from "mongoose";
 import User from "../models/user.model.js";
-import { buyerTermsCurrent, buyerTermsUpdate } from "../utils/buyerTerms.js";
+import { buyerTermsCurrent, buyerTermsUpdate, termsEveryMinutes, termsQuietMinutes } from "../utils/buyerTerms.js";
 
 const userRouter = Router();
 
@@ -51,7 +51,17 @@ userRouter.post('/me/delete', auth, deleteMyAccount);
 userRouter.get('/me/buyer-terms', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user._id).select("buyerTerms.acceptedAt").lean();
-        res.json({ success: true, data: { current: buyerTermsCurrent(user), acceptedAt: user?.buyerTerms?.acceptedAt || null } });
+        res.json({
+            success: true,
+            data: {
+                current: buyerTermsCurrent(user),
+                acceptedAt: user?.buyerTerms?.acceptedAt || null,
+                // The page re-checks against these as time passes (30 min; never in a lot's last 10 min).
+                everyMinutes: termsEveryMinutes(),
+                quietMinutes: termsQuietMinutes(),
+                serverNow: new Date().toISOString(),
+            },
+        });
     } catch (error) {
         console.error("Buyer terms status error:", error);
         res.status(500).json({ success: false, message: "Couldn't check your Buyer Terms agreement" });
