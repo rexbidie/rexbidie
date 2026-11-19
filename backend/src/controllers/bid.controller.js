@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { StripeService } from '../services/stripeService.js';
 import User from '../models/user.model.js';
 import Auction from '../models/auction.model.js';
@@ -628,267 +629,217 @@ export const getSellerBidHistory = async (req, res) => {
     }
 };
 
+// Lot statuses an admin can filter the Bids page by (value → label).
+export const ADMIN_BID_STATUSES = [
+    { value: 'active', label: 'Live' },
+    { value: 'sold', label: 'Sold' },
+    { value: 'sold_buy_now', label: 'Sold (Buy It Now)' },
+    { value: 'reserve_not_met', label: 'Reserve not met' },
+    { value: 'ended', label: 'Ended' },
+    { value: 'cancelled', label: 'Cancelled' },
+];
+
+const ADMIN_BID_SORTS = ['recent', 'ending_soon', 'most_bids', 'highest_bid', 'seller_name'];
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// "First Last", else username, else company name (never "undefined undefined").
+const personName = (u) => {
+    if (!u) return '';
+    const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+    return full || u.companyName || u.username || '';
+};
+
+/**
+ * @desc    Admin Bids page: lots with bids (or retracted bids), filtered, sorted and paged on the server.
+ * @route   GET /api/v1/bids/admin/history
+ * @query   page, limit (max 100), status, seller, search, sortBy, currency
+ * @access  Admin
+ */
 export const getAdminBidHistory = async (req, res) => {
     try {
-        const { page = 1, limit = 12, status, search, category, seller, sortBy = 'recent' } = req.query;
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+        const { status, seller } = req.query;
+        const search = String(req.query.search || '').trim();
+        const sortBy = ADMIN_BID_SORTS.includes(req.query.sortBy) ? req.query.sortBy : 'recent';
         const userCurrency = req.query.currency || 'EUR';
         const rates = getCachedRates();
 
-        // Helper to convert amount using auction's base currency
         const convertAmount = (amount, auction) => {
             if (!amount) return 0;
             if (!rates) return amount;
             const base = auction.baseCurrency || 'EUR';
-            const rate = rates[base]?.rates[userCurrency];
+            const rate = rates[base]?.rates?.[userCurrency];
             if (!rate) return amount;
             return parseFloat((amount * rate).toFixed(2));
         };
 
-        // Build filter object
-        const filter = {};
+        // Lots that have had bidding: current bids, or bids an admin retracted.
+        const hasBidding = { $or: [{ 'bids.0': { $exists: true } }, { 'retractedBids.0': { $exists: true } }] };
+        const and = [hasBidding];
 
-        // Status filter
-        if (status && status !== 'all') {
-            filter.status = status;
+        if (status && status !== 'all') and.push({ status });
+        if (seller && seller !== 'all' && mongoose.isValidObjectId(seller)) {
+            and.push({ seller: new mongoose.Types.ObjectId(seller) });
         }
-
-        // Category filter
-        if (category && category !== 'all') {
-            filter.category = category;
-        }
-
-        // Seller filter
-        if (seller && seller !== 'all') {
-            filter.seller = seller;
-        }
-
-        // Search filter
         if (search) {
-            filter.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { description: { $regex: search, $options: 'i' } },
-                { 'bids.bidderUsername': { $regex: search, $options: 'i' } }
-            ];
+            const rx = new RegExp(escapeRegex(search), 'i');
+            const people = await User.find({
+                $or: [{ username: rx }, { firstName: rx }, { lastName: rx }, { companyName: rx }, { email: rx }],
+            }).select('_id').limit(500).lean();
+            const ids = people.map((p) => p._id);
+            const or = [{ title: rx }, { 'bids.bidderUsername': rx }, { 'retractedBids.bidderUsername': rx }];
+            if (mongoose.isValidObjectId(search)) or.push({ _id: new mongoose.Types.ObjectId(search) });
+            if (ids.length) or.push({ seller: { $in: ids } }, { 'bids.bidder': { $in: ids } });
+            and.push({ $or: or });
         }
+        const match = { $and: and };
 
-        // Find auctions with bids
-        const auctions = await Auction.find({
-            ...filter,
-            'bids.0': { $exists: true } // Only auctions with at least one bid
-        })
+        const now = new Date();
+        const sortStages = {
+            recent: [{ $sort: { createdAt: -1, _id: -1 } }],
+            // Live lots closing soonest first, then everything else most recently ended.
+            ending_soon: [
+                { $addFields: { _closed: { $lt: ['$endDate', now] }, _endTs: { $toLong: '$endDate' } } },
+                { $addFields: { _endKey: { $cond: ['$_closed', { $multiply: ['$_endTs', -1] }, '$_endTs'] } } },
+                { $sort: { _closed: 1, _endKey: 1, _id: -1 } },
+            ],
+            most_bids: [{ $sort: { bidCount: -1, createdAt: -1, _id: -1 } }],
+            highest_bid: [{ $sort: { currentPrice: -1, createdAt: -1, _id: -1 } }],
+            seller_name: [
+                { $lookup: { from: 'users', localField: 'seller', foreignField: '_id', as: '_s' } },
+                { $addFields: { _s: { $arrayElemAt: ['$_s', 0] } } },
+                { $addFields: { _sellerName: { $toLower: { $trim: { input: { $concat: [
+                    { $ifNull: ['$_s.firstName', ''] }, ' ',
+                    { $ifNull: ['$_s.lastName', ''] }, ' ',
+                    { $ifNull: ['$_s.companyName', ''] },
+                ] } } } } } },
+                { $sort: { _sellerName: 1, createdAt: -1, _id: -1 } },
+            ],
+        };
+
+        const [facet] = await Auction.aggregate([
+            { $match: match },
+            ...sortStages[sortBy],
+            {
+                $facet: {
+                    ids: [{ $skip: (page - 1) * limit }, { $limit: limit }, { $project: { _id: 1 } }],
+                    total: [{ $count: 'n' }],
+                },
+            },
+        ]);
+        const pageIds = (facet?.ids || []).map((d) => d._id);
+        const total = facet?.total?.[0]?.n || 0;
+
+        const docs = await Auction.find({ _id: { $in: pageIds } })
             .populate('seller', 'username companyName firstName lastName email company')
-            .populate('currentBidder', 'username companyName firstName lastName email')
             .populate('winner', 'username companyName firstName lastName email')
             .populate('bids.bidder', 'username companyName firstName lastName email company')
-            .sort({ createdAt: -1 });
+            .lean();
+        const byId = new Map(docs.map((d) => [d._id.toString(), d]));
+        const auctions = pageIds.map((id) => byId.get(id.toString())).filter(Boolean);
 
-        // Transform data for admin view with converted amounts
-        const transformedAuctions = auctions.map(auction => {
-            // Sort bids by amount (highest first) and then by time
-            const sortedBids = [...auction.bids].sort((a, b) => {
-                if (b.amount !== a.amount) {
-                    return b.amount - a.amount;
-                }
-                return new Date(b.timestamp) - new Date(a.timestamp);
-            });
+        const transformedAuctions = auctions.map((auction) => {
+            const sortedBids = [...(auction.bids || [])].sort((a, b) =>
+                b.amount !== a.amount ? b.amount - a.amount : new Date(b.timestamp) - new Date(a.timestamp)
+            );
+            const winnerId = auction.winner?._id?.toString();
 
-            const bidsWithStatus = sortedBids.map((bid, index) => {
-                let status = "Outbid";
-
+            const bids = sortedBids.map((bid, index) => {
+                let bidStatus = 'Outbid';
                 if (auction.status === 'active') {
-                    if (index === 0) {
-                        status = "Winning";
-                    }
-                } else if (auction.status === 'sold' || auction.status === 'ended') {
-                    if (auction.winner && auction.winner?._id.toString() === bid.bidder?._id.toString() && index === 0) {
-                        status = "Winner";
-                    }
+                    if (index === 0) bidStatus = 'Winning';
+                } else if (['sold', 'ended', 'sold_buy_now'].includes(auction.status)) {
+                    if (index === 0 && winnerId && winnerId === bid.bidder?._id?.toString()) bidStatus = 'Winner';
                 } else if (auction.status === 'reserve_not_met') {
-                    status = "Reserve Not Met";
+                    bidStatus = 'Reserve Not Met';
                 }
-
                 return {
-                    id: bid?._id.toString(),
+                    id: bid._id?.toString(),
                     bidder: {
-                        id: bid.bidder?._id.toString(),
-                        name: `${bid.bidder?.firstName} ${bid.bidder?.lastName}`.trim() || bid.bidder?.username || bid.bidder?.companyName,
-                        username: bid.bidder?.username || '',
+                        id: bid.bidder?._id?.toString(),
+                        name: personName(bid.bidder) || bid.bidderUsername || 'Deleted user',
+                        username: bid.bidder?.username || bid.bidderUsername || '',
                         companyName: bid.bidder?.companyName || '',
                         email: bid.bidder?.email,
-                        company: bid.bidder?.company || 'N/A'
                     },
                     amount: bid.amount,
                     convertedAmount: convertAmount(bid.amount, auction),
                     time: bid.timestamp,
-                    status: status,
+                    status: bidStatus,
                     isHighest: index === 0,
-                    isProxyBid: bid.isProxyBid || false,
+                    isProxyBid: !!bid.isProxyBid,
                 };
             });
 
-            // Convert auction prices
-            const convertedStartingBid = convertAmount(auction.startPrice, auction);
-            const convertedReservePrice = convertAmount(auction.reservePrice, auction);
-            const convertedCurrentPrice = convertAmount(auction.currentPrice, auction);
-            const convertedWinningBid = convertAmount(sortedBids[0]?.amount || auction.currentPrice, auction);
-            const convertedCommissionAmount = convertAmount(auction.commissionAmount, auction);
-            const convertedFinalPrice = convertAmount(auction.finalPrice, auction);
-
             return {
-                id: auction?._id.toString(),
-                auctionId: `AU${auction?._id.toString().slice(-6).toUpperCase()}`,
+                id: auction._id.toString(),
+                auctionId: `AU${auction._id.toString().slice(-6).toUpperCase()}`,
                 title: auction.title,
-                description: auction.description,
                 category: auction.category,
                 auctionType: auction.auctionType === 'reserve' ? 'Reserve Auction' : 'Standard Auction',
                 startTime: auction.startDate,
                 endTime: auction.endDate,
-                // Original values
-                startingBidOriginal: auction.startPrice,
-                reservePriceOriginal: auction.reservePrice || 0,
-                currentPriceOriginal: auction.currentPrice,
-                winningBidOriginal: sortedBids[0]?.amount || auction.currentPrice,
-                commissionAmountOriginal: auction.commissionAmount || 0,
-                finalPriceOriginal: auction.finalPrice || 0,
-                // Converted values
-                convertedStartingBid,
-                convertedReservePrice,
-                convertedCurrentPrice,
-                convertedWinningBid,
-                convertedCommissionAmount,
-                convertedFinalPrice,
-                displayCurrency: userCurrency,
                 status: auction.status,
+                hasReserve: Number(auction.reservePrice) > 0,
+                reserveMet: !(Number(auction.reservePrice) > 0) || Number(auction.currentPrice) >= Number(auction.reservePrice),
+                convertedStartingBid: convertAmount(auction.startPrice, auction),
+                convertedReservePrice: convertAmount(auction.reservePrice, auction),
+                convertedCurrentPrice: convertAmount(auction.currentPrice, auction),
+                convertedWinningBid: convertAmount(sortedBids[0]?.amount || auction.currentPrice, auction),
+                convertedFinalPrice: convertAmount(auction.finalPrice, auction),
+                displayCurrency: userCurrency,
                 seller: {
-                    id: auction.seller?._id.toString(),
-                    name: `${auction.seller?.firstName} ${auction.seller?.lastName}`.trim() || auction.seller?.username || auction.seller?.companyName,
+                    id: auction.seller?._id?.toString(),
+                    name: personName(auction.seller) || auction.sellerUsername || 'Unknown seller',
                     username: auction.seller?.username || '',
-                    companyName: auction.seller?.companyName || '',
                     email: auction.seller?.email,
-                    company: auction.seller?.company || 'N/A',
-                    rating: 0
                 },
-                winner: auction.winner ? {
-                    id: auction.winner?._id.toString(),
-                    name: `${auction.winner.firstName} ${auction.winner.lastName}`.trim() || auction.winner.username || auction.winner?.companyName
-                } : null,
-                totalBids: auction.bidCount,
-                retractions: (auction.retractedBids || []).map(r => ({
+                winner: auction.winner ? { id: winnerId, name: personName(auction.winner) } : null,
+                totalBids: (auction.bids || []).length,
+                uniqueBidders: new Set((auction.bids || []).map((b) => (b.bidder?._id ?? b.bidder)?.toString())).size,
+                retractions: (auction.retractedBids || []).map((r) => ({
                     bidderUsername: r.bidderUsername,
                     bidCount: r.bids?.length || 0,
-                    convertedHighestBid: convertAmount(Math.max(0, ...(r.bids || []).map(b => b.amount || 0)), auction),
+                    convertedHighestBid: convertAmount(Math.max(0, ...(r.bids || []).map((b) => b.amount || 0)), auction),
                     convertedPriceBefore: convertAmount(r.priceBefore, auction),
                     convertedPriceAfter: convertAmount(r.priceAfter, auction),
                     reason: r.reason,
                     retractedAt: r.retractedAt,
                 })),
-                uniqueBidders: new Set(auction.bids.map(bid => bid.bidder?._id.toString())).size,
-                bids: bidsWithStatus,
-                createdAt: auction.createdAt
+                bids,
+                createdAt: auction.createdAt,
             };
         });
 
-        // Apply additional sorting (using converted values where applicable)
-        transformedAuctions.sort((a, b) => {
-            switch (sortBy) {
-                case 'recent':
-                    return new Date(b.createdAt) - new Date(a.createdAt);
-                case 'ending_soon':
-                    return new Date(a.endTime) - new Date(b.endTime);
-                case 'most_bids':
-                    return b.totalBids - a.totalBids;
-                case 'highest_bid':
-                    return b.convertedWinningBid - a.convertedWinningBid;
-                case 'seller_name':
-                    return a.seller?.name.localeCompare(b.seller?.name);
-                default:
-                    return new Date(b.createdAt) - new Date(a.createdAt);
-            }
-        });
-
-        // Calculate admin statistics (with converted revenue)
-        const totalAuctionsWithBids = await Auction.countDocuments({
-            'bids.0': { $exists: true },  // ✅ Fixed
-            ...filter
-        });
-
-        const totalBidsAll = await Auction.aggregate([
-            { $match: { 'bids.0': { $exists: true } } },
-            { $unwind: '$bids' },
-            { $count: 'totalBids' }
-        ]);
-
-        // Calculate total revenue from commissions (converted)
-        const soldAuctionsWithCommission = await Auction.find({
-            status: 'sold',
-            commissionAmount: { $gt: 0 }
-        }).select('commissionAmount baseCurrency');
-
-        let totalRevenueConverted = 0;
-        for (const auction of soldAuctionsWithCommission) {
-            totalRevenueConverted += convertAmount(auction.commissionAmount, auction);
-        }
-
-        const activeAuctionsWithBids = await Auction.countDocuments({
-            status: 'active',
-            'bids.0': { $exists: true }
-        });
-
-        const statistics = {
-            totalAuctionsWithBids,
-            totalBids: totalBidsAll[0]?.totalBids || 0,
-            totalRevenue: parseFloat(totalRevenueConverted.toFixed(2)),
-            activeAuctionsWithBids,
-            averageBidsPerAuction: totalAuctionsWithBids > 0 ?
-                Math.round((totalBidsAll[0]?.totalBids || 0) / totalAuctionsWithBids) : 0,
-            displayCurrency: userCurrency
-        };
-
-        // Get unique categories and sellers for filters
-        const categories = await Auction.distinct('category', { 'bids.0': { $exists: true } });
-        const sellers = await Auction.distinct('seller', { 'bids.0': { $exists: true } });
-
-        const sellersPopulated = await Auction.populate(sellers.map(sellerId => ({ _id: sellerId })), {
-            path: 'seller',
-            select: 'username firstName lastName'
-        });
-
-        const filterOptions = {
-            categories: ['all', ...categories],
-            sellers: ['all', ...sellersPopulated.map(s => ({
-                id: s?._id.toString(),
-                name: `${s.seller?.firstName} ${s.seller?.lastName}`.trim() || s.seller?.username || s.seller?.companyName
-            }))],
-            statuses: [
-                'all', 'active', 'sold', 'ended', 'reserve_not_met', 'cancelled'
-            ]
-        };
-
-        // Pagination
-        const start = (parseInt(page) - 1) * parseInt(limit);
-        const paginatedAuctions = transformedAuctions.slice(start, start + parseInt(limit));
+        // Seller dropdown: everyone who has a lot with bidding, by name.
+        const sellerIds = await Auction.distinct('seller', hasBidding);
+        const sellerUsers = await User.find({ _id: { $in: sellerIds } })
+            .select('username firstName lastName companyName').lean();
+        const sellers = sellerUsers
+            .map((u) => ({ id: u._id.toString(), name: personName(u) || 'Unnamed seller' }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'en-IE'));
 
         res.status(200).json({
             success: true,
             data: {
-                auctions: paginatedAuctions,
-                statistics,
-                filterOptions,
+                auctions: transformedAuctions,
+                filterOptions: { statuses: ADMIN_BID_STATUSES, sellers },
                 pagination: {
-                    currentPage: parseInt(page),
-                    totalPages: Math.ceil(totalAuctionsWithBids / limit),
-                    totalAuctions: totalAuctionsWithBids,
-                    hasNextPage: start + paginatedAuctions.length < totalAuctionsWithBids,
-                    hasPrevPage: start > 0
-                }
-            }
+                    currentPage: page,
+                    limit,
+                    totalPages: Math.max(1, Math.ceil(total / limit)),
+                    totalAuctions: total,
+                    hasNextPage: page * limit < total,
+                    hasPrevPage: page > 1,
+                },
+            },
         });
-
     } catch (error) {
         console.error('Admin bid history error:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error while fetching bid history'
+            message: 'Internal server error while fetching bid history',
         });
     }
 };

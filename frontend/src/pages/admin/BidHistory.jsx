@@ -1,54 +1,150 @@
-import { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Calendar, Download, BarChart3, User, Gavel, Award, Clock, Banknote, Users, TrendingUp, Package, Undo2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Search, BarChart3, User, Gavel, TrendingUp, Users, Undo2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import axiosInstance from "../../utils/axiosInstance.js";
 import { toast } from "react-hot-toast";
 import { AdminContainer, AdminHeader, AdminSidebar } from "../../components/index.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 
-function BidHistory() {
-    const [allAuctions, setAllAuctions] = useState([]); // Store all auctions from initial fetch
-    const [filteredAuctions, setFilteredAuctions] = useState([]); // Store filtered auctions
-    const [selectedAuction, setSelectedAuction] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({});
-    const [filterOptions, setFilterOptions] = useState({});
+const PAGE_SIZE = 25;
 
-    // Filters - all handled on frontend now
-    const [filters, setFilters] = useState({
-        status: "all",
-        category: "all",
-        seller: "all",
-        search: "",
-        sortBy: "recent"
-    });
+const DEFAULT_FILTERS = {
+    status: "all",
+    seller: "all",
+    search: "",
+    sortBy: "recent",
+};
 
+// Badge for a lot's status.
+const LOT_STATUS = {
+    active: { class: "bg-green-100 text-green-800", text: "Live" },
+    sold: { class: "bg-purple-100 text-purple-800", text: "Sold" },
+    sold_buy_now: { class: "bg-purple-100 text-purple-800", text: "Sold (Buy It Now)" },
+    reserve_not_met: { class: "bg-orange-100 text-orange-800", text: "Reserve not met" },
+    ended: { class: "bg-gray-100 text-gray-800", text: "Ended" },
+    cancelled: { class: "bg-red-100 text-red-800", text: "Cancelled" },
+    draft: { class: "bg-gray-100 text-gray-600", text: "Draft" },
+    approved: { class: "bg-blue-100 text-blue-800", text: "Upcoming" },
+};
+
+// Badge for one bid in the table.
+const BID_STATUS = {
+    Winner: "bg-green-100 text-green-800",
+    Winning: "bg-blue-100 text-blue-800",
+    Outbid: "bg-gray-100 text-gray-800",
+    "Reserve Not Met": "bg-orange-100 text-orange-800",
+};
+
+const Badge = ({ className, children }) => (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${className}`}>{children}</span>
+);
+
+const LotStatusBadge = ({ status }) => {
+    const cfg = LOT_STATUS[status] || { class: "bg-gray-100 text-gray-700", text: status || "Unknown" };
+    return <Badge className={cfg.class}>{cfg.text}</Badge>;
+};
+
+export default function BidHistory() {
     const { user } = useAuth();
-    const userCurrency = user?.currency || 'EUR';
+    const userCurrency = user?.currency || "EUR";
+
+    const [auctions, setAuctions] = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, totalAuctions: 0 });
+    const [filterOptions, setFilterOptions] = useState({ statuses: [], sellers: [] });
+    const [stats, setStats] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [filters, setFilters] = useState(DEFAULT_FILTERS);
+    const [searchInput, setSearchInput] = useState("");
+    const [page, setPage] = useState(1);
     const [retractingBidder, setRetractingBidder] = useState(null);
+    const requestRef = useRef(0);
+
+    const selectedAuction = auctions.find((a) => a.id === selectedId) || null;
+
+    const fetchHistory = useCallback(async () => {
+        const requestId = ++requestRef.current;
+        setLoading(true);
+        try {
+            const params = new URLSearchParams({
+                currency: userCurrency,
+                page: String(page),
+                limit: String(PAGE_SIZE),
+                status: filters.status,
+                seller: filters.seller,
+                sortBy: filters.sortBy,
+            });
+            if (filters.search) params.set("search", filters.search);
+
+            const { data } = await axiosInstance.get(`/api/v1/bids/admin/history?${params}`);
+            if (requestId !== requestRef.current || !data.success) return; // a newer request is on its way
+
+            const list = data.data.auctions || [];
+            setAuctions(list);
+            setPagination(data.data.pagination || { currentPage: 1, totalPages: 1, totalAuctions: list.length });
+            setFilterOptions(data.data.filterOptions || { statuses: [], sellers: [] });
+            setSelectedId((prev) => (list.some((a) => a.id === prev) ? prev : list[0]?.id ?? null));
+        } catch (error) {
+            if (requestId !== requestRef.current) return;
+            console.error("Fetch admin bid history error:", error);
+            toast.error("Failed to load bids");
+        } finally {
+            if (requestId === requestRef.current) setLoading(false);
+        }
+    }, [userCurrency, page, filters]);
+
+    useEffect(() => {
+        fetchHistory();
+    }, [fetchHistory]);
+
+    useEffect(() => {
+        axiosInstance
+            .get(`/api/v1/bids/admin/stats?currency=${userCurrency}`)
+            .then(({ data }) => data.success && setStats(data.data))
+            .catch((error) => console.error("Fetch admin bid stats error:", error));
+    }, [userCurrency]);
+
+    // Search runs 400ms after typing stops.
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setFilters((prev) => (prev.search === searchInput.trim() ? prev : { ...prev, search: searchInput.trim() }));
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(t);
+    }, [searchInput]);
+
+    const handleFilterChange = (key, value) => {
+        setFilters((prev) => ({ ...prev, [key]: value }));
+        setPage(1);
+    };
+
+    const clearFilters = () => {
+        setSearchInput("");
+        setFilters(DEFAULT_FILTERS);
+        setPage(1);
+    };
+
+    const filtersActive =
+        filters.status !== "all" || filters.seller !== "all" || filters.search || filters.sortBy !== "recent";
 
     // Retract every bid a bidder has on a live lot (e.g. they withdrew before close).
     const handleRetract = async (auction, bidder) => {
         const name = bidder.name || bidder.username || "this bidder";
         const reason = window.prompt(
             `Retract ALL of ${name}'s bids on "${auction.title}"?\n\n` +
-            `Their proxy (max) bid will also be switched off and the price will drop back. This can't be undone.\n\n` +
-            `Reason (kept on record):`,
+                `Their proxy (max) bid will also be switched off and the price will drop back. This can't be undone.\n\n` +
+                `Reason (kept on record):`,
             "Bidder withdrew bid before close (s.58(2) Sale of Goods Act 1893)"
         );
         if (reason === null) return;
 
         setRetractingBidder(bidder.id);
         try {
-            const { data } = await axiosInstance.post(
-                `/api/v1/bids/admin/auctions/${auction.id}/retract`,
-                { bidderId: bidder.id, reason }
-            );
+            const { data } = await axiosInstance.post(`/api/v1/bids/admin/auctions/${auction.id}/retract`, {
+                bidderId: bidder.id,
+                reason,
+            });
             toast.success(data.message || "Bids retracted");
-            const { data: history } = await axiosInstance.get(`/api/v1/bids/admin/history?currency=${userCurrency}`);
-            if (history.success) {
-                setAllAuctions(history.data.auctions);
-                setSelectedAuction(history.data.auctions.find(a => a.id === auction.id) || null);
-            }
+            await fetchHistory();
         } catch (error) {
             toast.error(error.response?.data?.message || "Failed to retract bids");
         } finally {
@@ -56,484 +152,301 @@ function BidHistory() {
         }
     };
 
-    // Fetch all data once on component mount
-    const fetchAllData = async () => {
-        try {
-            setLoading(true);
-
-            const [historyResponse, statsResponse] = await Promise.all([
-                axiosInstance.get(`/api/v1/bids/admin/history?currency=${userCurrency}`), // No filters initially
-                axiosInstance.get(`/api/v1/bids/admin/stats?currency=${userCurrency}`)
-            ]);
-
-            if (historyResponse.data.success) {
-                setAllAuctions(historyResponse.data.data.auctions);
-                setFilteredAuctions(historyResponse.data.data.auctions); // Initially show all
-                setFilterOptions(historyResponse.data.data.filterOptions);
-                if (historyResponse.data.data.auctions.length > 0) {
-                    setSelectedAuction(historyResponse.data.data.auctions[0]);
-                }
-            }
-
-            if (statsResponse.data.success) {
-                setStats(statsResponse.data.data);
-            }
-
-        } catch (error) {
-            console.error('Fetch admin bid history error:', error);
-            toast.error('Failed to load bid history');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Apply filters locally
-    const applyFilters = useMemo(() => {
-        return () => {
-            let filtered = [...allAuctions];
-
-            // Search filter
-            if (filters.search) {
-                const searchTerm = filters.search.toLowerCase();
-                filtered = filtered.filter(auction =>
-                    auction.title?.toLowerCase().includes(searchTerm) ||
-                    auction.description?.toLowerCase().includes(searchTerm) ||
-                    auction.seller?.name?.toLowerCase().includes(searchTerm) ||
-                    auction.seller?.username?.toLowerCase().includes(searchTerm) ||
-                    auction.bids.some(bid =>
-                        bid.bidder.name?.toLowerCase().includes(searchTerm) ||
-                        bid.bidder.username?.toLowerCase().includes(searchTerm) ||
-                        bid.bidder.email?.toLowerCase().includes(searchTerm)
-                    )
-                );
-            }
-
-            // Status filter
-            if (filters.status !== "all") {
-                filtered = filtered.filter(auction => auction.status === filters.status);
-            }
-
-            // Category filter
-            if (filters.category !== "all") {
-                filtered = filtered.filter(auction => auction.category === filters.category);
-            }
-
-            // Seller filter
-            if (filters.seller !== "all") {
-                filtered = filtered.filter(auction => auction.seller.id === filters.seller);
-            }
-
-            // Apply sorting
-            filtered.sort((a, b) => {
-                switch (filters.sortBy) {
-                    case "recent":
-                        return new Date(b.createdAt) - new Date(a.createdAt);
-                    case "ending_soon":
-                        return new Date(a.endTime) - new Date(b.endTime);
-                    case "most_bids":
-                        return b.totalBids - a.totalBids;
-                    case "highest_bid":
-                        return b.convertedWinningBid - a.convertedWinningBid;
-                    case "seller_name":
-                        return a.seller.name.localeCompare(b.seller.name);
-                    default:
-                        return new Date(b.createdAt) - new Date(a.createdAt);
-                }
-            });
-
-            return filtered;
-        };
-    }, [allAuctions, filters]);
-
-    // Update filtered auctions when filters change
-    useEffect(() => {
-        if (allAuctions.length > 0) {
-            const filtered = applyFilters();
-            setFilteredAuctions(filtered);
-
-            // Update selected auction if it's no longer in filtered list
-            if (selectedAuction && !filtered.find(a => a.id === selectedAuction.id)) {
-                setSelectedAuction(filtered.length > 0 ? filtered[0] : null);
-            }
-        }
-    }, [applyFilters, allAuctions.length, selectedAuction]);
-
-    // Initial fetch
-    useEffect(() => {
-        fetchAllData();
-    }, []);
-
-    // Handle filter changes - no API calls
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-    };
-
-    const clearFilters = () => {
-        setFilters({
-            status: "all",
-            category: "all",
-            seller: "all",
-            search: "",
-            sortBy: "recent"
-        });
-    };
-
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-            // No API call needed - filters are applied automatically
-        }
-    };
-
-    const formatTime = (dateString) => {
-        return new Date(dateString).toLocaleTimeString('en-IE', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IE', {
-            style: 'currency',
-            currency: `${userCurrency}`,
+    const formatCurrency = (amount) =>
+        new Intl.NumberFormat("en-IE", {
+            style: "currency",
+            currency: userCurrency,
             minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(amount);
-    };
+            maximumFractionDigits: 0,
+        }).format(amount || 0);
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-IE', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
+    const formatDate = (d) =>
+        d ? new Date(d).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" }) : "–";
 
-    const getStatusBadge = (status) => {
-        const statusConfig = {
-            Winner: { class: "bg-green-100 text-green-800", text: "Winner" },
-            Winning: { class: "bg-blue-100 text-blue-800", text: "Winning" },
-            Outbid: { class: "bg-gray-100 text-gray-800", text: "Outbid" },
-            'Reserve Not Met': { class: "bg-orange-100 text-orange-800", text: "Reserve Not Met" },
-            Active: { class: "bg-green-100 text-green-800", text: "Active" },
-            Sold: { class: "bg-purple-100 text-purple-800", text: "Sold" },
-            Ended: { class: "bg-gray-100 text-gray-800", text: "Ended" },
-            Cancelled: { class: "bg-red-100 text-red-800", text: "Cancelled" }
-        };
+    const formatTime = (d) => (d ? new Date(d).toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" }) : "");
 
-        const config = statusConfig[status] || statusConfig.Outbid;
-        return <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.class}`}>{config.text}</span>;
-    };
-
-    const getCategoryIcon = (category) => {
-        switch (category) {
-            case "Aircraft":
-                return <Package size={18} className="text-blue-600" />;
-            case "Engines & Parts":
-                return <Package size={18} className="text-green-600" />;
-            case "Memorabilia":
-                return <Award size={18} className="text-amber-600" />;
-            default:
-                return <Package size={18} className="text-gray-600" />;
-        }
-    };
-
-    // Stats cards configuration
     const statCards = [
-        {
-            title: "Total Bids",
-            value: stats.totalBids?.toLocaleString('en-IE') || "0",
-            change: "All Time",
-            icon: <Gavel size={24} />,
-            color: "blue"
-        },
-        {
-            title: "Recent Bids",
-            value: stats.recentBids?.toLocaleString('en-IE') || "0",
-            change: "Last 7 Days",
-            icon: <TrendingUp size={24} />,
-            color: "green"
-        },
-        // {
-        //     title: "Total Revenue",
-        //     value: formatCurrency(stats.totalRevenue || 0),
-        //     change: "From Commissions",
-        //     icon: <Banknote size={24} />,
-        //     color: "purple"
-        // },
-        {
-            title: "Active Bidders",
-            value: stats.activeBidders?.toLocaleString('en-IE') || "0",
-            change: "Last 30 Days",
-            icon: <Users size={24} />,
-            color: "orange"
-        }
+        { title: "Total Bids", value: stats.totalBids, note: "All time", icon: <Gavel size={22} />, tone: "bg-blue-100 text-blue-600" },
+        { title: "Recent Bids", value: stats.recentBids, note: "Last 7 days", icon: <TrendingUp size={22} />, tone: "bg-green-100 text-green-600" },
+        { title: "Active Bidders", value: stats.activeBidders, note: "Last 30 days", icon: <Users size={22} />, tone: "bg-orange-100 text-orange-600" },
+        { title: "Lots with Bids", value: pagination.totalAuctions, note: filtersActive ? "Matching filters" : "All time", icon: <BarChart3 size={22} />, tone: "bg-purple-100 text-purple-600" },
     ];
+
+    const firstShown = pagination.totalAuctions ? (pagination.currentPage - 1) * PAGE_SIZE + 1 : 0;
+    const lastShown = Math.min(pagination.currentPage * PAGE_SIZE, pagination.totalAuctions);
+    const isLive = selectedAuction?.status === "active";
 
     return (
         <section className="flex min-h-screen bg-gray-50">
             <AdminSidebar />
-            <div className="w-full relative">
+            <div className="w-full relative min-w-0">
                 <AdminHeader />
                 <AdminContainer>
-                    <div className="max-w-full pt-16 pb-7 md:pt-0">
-                        <h2 className="text-3xl md:text-4xl font-bold my-5 text-gray-800">Bid History</h2>
-                        {/* <p className="text-gray-600">Track all bidding activity on your auctions.</p> */}
+                    <div className="max-w-full pt-16 pb-4 md:pt-0">
+                        <h2 className="text-3xl md:text-4xl font-bold my-5 text-gray-800">Bids</h2>
                     </div>
 
-                    {/* Statistics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        {statCards.map((stat, index) => (
-                            <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
+                    {/* Statistics */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        {statCards.map((stat) => (
+                            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
                                         <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                                        <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                                        <p className="text-xs text-gray-500 mt-1">{stat.change}</p>
+                                        <p className="text-2xl font-bold text-gray-900 mt-1">{(stat.value ?? 0).toLocaleString("en-IE")}</p>
+                                        <p className="text-xs text-gray-500 mt-1">{stat.note}</p>
                                     </div>
-                                    <div className={`p-3 rounded-lg bg-${stat.color}-100 text-${stat.color}-600`}>
-                                        {stat.icon}
-                                    </div>
+                                    <div className={`hidden sm:block p-3 rounded-lg ${stat.tone}`}>{stat.icon}</div>
                                 </div>
                             </div>
                         ))}
                     </div>
 
                     {/* Filters */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                            {/* Search */}
-                            <div className="lg:col-span-2">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search auctions, bidders..."
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        value={filters.search}
-                                        onChange={(e) => handleFilterChange('search', e.target.value)}
-                                        onKeyPress={handleKeyPress}
-                                    />
-                                </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-5 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="relative lg:col-span-2">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input
+                                    type="search"
+                                    placeholder="Search lot, seller or bidder…"
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                />
                             </div>
 
-                            {/* Status Filter */}
-                            <div>
-                                <select
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    value={filters.status}
-                                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                                >
-                                    <option value="all">All Status</option>
-                                    {filterOptions.statuses?.map(status => (
-                                        <option key={status} value={status}>
-                                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <select
+                                aria-label="Status"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                value={filters.status}
+                                onChange={(e) => handleFilterChange("status", e.target.value)}
+                            >
+                                <option value="all">All statuses</option>
+                                {filterOptions.statuses.map((s) => (
+                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                ))}
+                            </select>
 
-                            {/* Category Filter */}
-                            {/* <div>
-                                <select
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    value={filters.category}
-                                    onChange={(e) => handleFilterChange('category', e.target.value)}
-                                >
-                                    <option value="all">All Categories</option>
-                                    {filterOptions.categories?.map(category => (
-                                        <option key={category} value={category}>{category}</option>
-                                    ))}
-                                </select>
-                            </div> */}
+                            <select
+                                aria-label="Seller"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                value={filters.seller}
+                                onChange={(e) => handleFilterChange("seller", e.target.value)}
+                            >
+                                <option value="all">All sellers</option>
+                                {filterOptions.sellers.map((s) => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
 
-                            {/* Sort By */}
-                            <div>
-                                <select
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    value={filters.sortBy}
-                                    onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                                >
-                                    <option value="recent">Most Recent</option>
-                                    <option value="ending_soon">Ending Soon</option>
-                                    <option value="most_bids">Most Bids</option>
-                                    <option value="highest_bid">Highest Bid</option>
-                                    <option value="seller_name">Seller Name</option>
-                                </select>
-                            </div>
+                            <select
+                                aria-label="Sort by"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                value={filters.sortBy}
+                                onChange={(e) => handleFilterChange("sortBy", e.target.value)}
+                            >
+                                <option value="recent">Newest listings</option>
+                                <option value="ending_soon">Ending soon</option>
+                                <option value="most_bids">Most bids</option>
+                                <option value="highest_bid">Highest bid</option>
+                                <option value="seller_name">Seller name (A–Z)</option>
+                            </select>
                         </div>
 
-                        {/* Clear Filters */}
-                        <div className="flex justify-between items-center mt-4">
-                            <div className="text-sm text-gray-500">
-                                Showing {filteredAuctions.length} of {allAuctions.length} auctions
+                        <div className="flex flex-wrap justify-between items-center gap-2 mt-3">
+                            <div className="text-sm text-gray-500 flex items-center gap-2">
+                                {loading && <Loader2 size={14} className="animate-spin" />}
+                                {pagination.totalAuctions
+                                    ? `Showing ${firstShown}–${lastShown} of ${pagination.totalAuctions} lots`
+                                    : loading ? "Loading…" : "No lots match these filters"}
                             </div>
-                            <button
-                                onClick={clearFilters}
-                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                            >
-                                Clear all filters
-                            </button>
+                            {filtersActive && (
+                                <button onClick={clearFilters} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                                    Clear filters
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* Auctions List */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Auctions Sidebar */}
-                        <div className="lg:col-span-1">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                                <div className="p-4 border-b border-gray-200">
-                                    <h3 className="text-lg font-semibold">Auctions with Bids ({filteredAuctions.length})</h3>
-                                </div>
-                                <div className="max-h-96 overflow-y-auto">
-                                    {filteredAuctions.map(auction => (
-                                        <div
-                                            key={auction.id}
-                                            className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${selectedAuction?.id === auction.id ? 'bg-blue-50 border-blue-200' : ''
-                                                }`}
-                                            onClick={() => setSelectedAuction(auction)}
-                                        >
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <h4 className="font-medium text-gray-900 text-sm line-clamp-2">
-                                                        {auction.title}
-                                                    </h4>
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        {getCategoryIcon(auction.category)}
-                                                        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                                            {auction.auctionType}
-                                                        </span>
-                                                        {getStatusBadge(auction.status)}
-                                                    </div>
-                                                    <div className="flex justify-between items-center mt-2">
-                                                        <span className="text-sm font-medium text-gray-900">
-                                                            {formatCurrency(auction.convertedWinningBid)}
-                                                        </span>
-                                                        <span className="text-xs text-gray-500">
-                                                            {auction.totalBids} bids
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                        {/* Lot list */}
+                        <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-gray-200 lg:sticky lg:top-4">
+                            <div className="p-4 border-b border-gray-200">
+                                <h3 className="text-lg font-semibold">Lots</h3>
                             </div>
+                            <div className={`max-h-[60vh] lg:max-h-[calc(100vh-14rem)] overflow-y-auto ${loading ? "opacity-60" : ""}`}>
+                                {auctions.map((auction) => (
+                                    <button
+                                        type="button"
+                                        key={auction.id}
+                                        onClick={() => setSelectedId(auction.id)}
+                                        className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${selectedId === auction.id ? "bg-blue-50" : ""}`}
+                                    >
+                                        <div className="font-medium text-gray-900 text-sm line-clamp-2">{auction.title}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5 truncate">
+                                            {auction.auctionId} · {auction.seller?.name}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                            <LotStatusBadge status={auction.status} />
+                                            {auction.hasReserve && (
+                                                <Badge className={auction.reserveMet ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}>
+                                                    {auction.reserveMet ? "Reserve met" : "Reserve not met"}
+                                                </Badge>
+                                            )}
+                                            {auction.retractions?.length > 0 && <Badge className="bg-red-50 text-red-700">Retracted</Badge>}
+                                        </div>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-sm font-semibold text-gray-900">{formatCurrency(auction.convertedWinningBid)}</span>
+                                            <span className="text-xs text-gray-500">
+                                                {auction.totalBids} bid{auction.totalBids === 1 ? "" : "s"} · {auction.status === "active" ? "ends" : "ended"} {formatDate(auction.endTime)}
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                                {!loading && auctions.length === 0 && (
+                                    <div className="p-8 text-center text-sm text-gray-500">No lots match these filters.</div>
+                                )}
+                            </div>
+
+                            {pagination.totalPages > 1 && (
+                                <div className="flex items-center justify-between p-3 border-t border-gray-200 text-sm">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={!pagination.hasPrevPage || loading}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-40"
+                                    >
+                                        <ChevronLeft size={16} /> Previous
+                                    </button>
+                                    <span className="text-gray-600">Page {pagination.currentPage} of {pagination.totalPages}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => p + 1)}
+                                        disabled={!pagination.hasNextPage || loading}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-40"
+                                    >
+                                        Next <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Selected Auction Details */}
-                        <div className="lg:col-span-2">
+                        {/* Selected lot */}
+                        <div className="lg:col-span-2 min-w-0">
                             {selectedAuction ? (
                                 <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                                    {/* Auction Header */}
-                                    <div className="p-6 border-b border-gray-200">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            {getCategoryIcon(selectedAuction.category)}
-                                            <span className="text-sm font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                                {selectedAuction.category}
-                                            </span>
-                                            <span className={`text-sm font-medium px-2 py-1 rounded ${selectedAuction.auctionType === "Reserve Auction"
-                                                ? "bg-purple-100 text-purple-800"
-                                                : "bg-blue-100 text-blue-800"
-                                                }`}>
+                                    <div className="p-5 border-b border-gray-200">
+                                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">{selectedAuction.auctionId}</span>
+                                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${selectedAuction.auctionType === "Reserve Auction" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
                                                 {selectedAuction.auctionType}
                                             </span>
-                                            {getStatusBadge(selectedAuction.status)}
+                                            <LotStatusBadge status={selectedAuction.status} />
                                         </div>
-                                        <h2 className="text-xl font-bold text-gray-900 mb-2">{selectedAuction.title}</h2>
+                                        <h2 className="text-xl font-bold text-gray-900">{selectedAuction.title}</h2>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            Seller: <span className="text-gray-800 font-medium">{selectedAuction.seller?.name}</span>
+                                            {selectedAuction.seller?.email && <> · {selectedAuction.seller.email}</>}
+                                        </p>
 
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
                                             <div>
-                                                <div className="text-sm text-gray-500">Starting Bid</div>
+                                                <div className="text-xs text-gray-500">Starting bid</div>
                                                 <div className="font-medium">{formatCurrency(selectedAuction.convertedStartingBid)}</div>
                                             </div>
                                             <div>
-                                                <div className="text-sm text-gray-500">Winning Bid</div>
+                                                <div className="text-xs text-gray-500">{isLive ? "Current bid" : "Top bid"}</div>
                                                 <div className="font-medium text-green-600">{formatCurrency(selectedAuction.convertedWinningBid)}</div>
                                             </div>
                                             <div>
-                                                <div className="text-sm text-gray-500">Total Bids</div>
-                                                <div className="font-medium">{selectedAuction.totalBids}</div>
+                                                <div className="text-xs text-gray-500">Reserve</div>
+                                                <div className="font-medium">
+                                                    {selectedAuction.hasReserve ? formatCurrency(selectedAuction.convertedReservePrice) : "None"}
+                                                    {selectedAuction.hasReserve && (
+                                                        <span className={`block text-xs ${selectedAuction.reserveMet ? "text-emerald-600" : "text-amber-600"}`}>
+                                                            {selectedAuction.reserveMet ? "Met" : "Not met"}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div>
-                                                <div className="text-sm text-gray-500">Unique Bidders</div>
-                                                <div className="font-medium">{selectedAuction.uniqueBidders}</div>
+                                                <div className="text-xs text-gray-500">Bids / bidders</div>
+                                                <div className="font-medium">{selectedAuction.totalBids} / {selectedAuction.uniqueBidders}</div>
                                             </div>
-                                        </div>
-
-                                        {/* Seller Info */}
-                                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                                            <div className="text-sm text-gray-600 mb-1">Seller</div>
-                                            <div className="font-medium">{selectedAuction.seller.name}</div>
-                                            <div className="text-sm text-gray-500">@{selectedAuction.seller.username} • {selectedAuction.seller.email}</div>
+                                            <div>
+                                                <div className="text-xs text-gray-500">{isLive ? "Ends" : "Ended"}</div>
+                                                <div className="font-medium">
+                                                    {formatDate(selectedAuction.endTime)}
+                                                    <span className="block text-xs text-gray-500">{formatTime(selectedAuction.endTime)}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Bids Table */}
-                                    <div className="p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Bid History ({selectedAuction.bids.length})</h3>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Bidder</th>
-                                                        <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                                        <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                                        <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                                                        <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                                        {selectedAuction.status === 'active' && (
-                                                            <th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                                                        )}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-200">
-                                                    {selectedAuction.bids.map((bid) => (
-                                                        <tr key={bid.id} className="hover:bg-gray-50">
-                                                            <td className="py-3 px-4">
-                                                                <div className="flex items-center">
-                                                                    <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center mr-3">
-                                                                        <User size={14} className="text-gray-500" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="font-medium text-sm text-gray-900">{bid.bidder.name}</div>
-                                                                        <div className="text-xs text-gray-500">@{bid.bidder.username}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                <div className={`font-medium text-sm ${bid.isHighest ? 'text-green-600' : 'text-gray-900'
-                                                                    }`}>
-                                                                    {formatCurrency(bid.convertedAmount)}
-                                                                    <span className="block text-xs">({bid.isProxyBid ? 'Proxy Bid' : 'Manual Bid'})</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="py-3 px-4 text-sm text-gray-900">
-                                                                {formatDate(bid.time)}
-                                                            </td>
-                                                            <td className="py-3 px-4 text-sm text-gray-900">
-                                                                {formatTime(bid.time)}
-                                                            </td>
-                                                            <td className="py-3 px-4">
-                                                                {getStatusBadge(bid.status)}
-                                                            </td>
-                                                            {selectedAuction.status === 'active' && (
-                                                                <td className="py-3 px-4">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleRetract(selectedAuction, bid.bidder)}
-                                                                        disabled={!!retractingBidder}
-                                                                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
-                                                                        title="Retract all of this bidder's bids on this lot"
-                                                                    >
-                                                                        <Undo2 size={14} />
-                                                                        {retractingBidder === bid.bidder.id ? 'Retracting…' : 'Retract'}
-                                                                    </button>
-                                                                </td>
-                                                            )}
+                                    <div className="p-5">
+                                        <h3 className="text-lg font-semibold mb-3">Bid history ({selectedAuction.bids.length})</h3>
+                                        {selectedAuction.bids.length === 0 ? (
+                                            <p className="text-sm text-gray-500">No bids left on this lot.</p>
+                                        ) : (
+                                            <div className="overflow-x-auto -mx-5 px-5">
+                                                <table className="w-full min-w-[560px]">
+                                                    <thead className="bg-gray-50">
+                                                        <tr>
+                                                            <th className="py-2.5 px-3 text-left text-xs font-medium text-gray-500 uppercase">Bidder</th>
+                                                            <th className="py-2.5 px-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                                            <th className="py-2.5 px-3 text-left text-xs font-medium text-gray-500 uppercase">When</th>
+                                                            <th className="py-2.5 px-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                                            {isLive && <th className="py-2.5 px-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>}
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200">
+                                                        {selectedAuction.bids.map((bid) => (
+                                                            <tr key={bid.id} className="hover:bg-gray-50">
+                                                                <td className="py-2.5 px-3">
+                                                                    <div className="flex items-center">
+                                                                        <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center mr-3 shrink-0">
+                                                                            <User size={14} className="text-gray-500" />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <div className="font-medium text-sm text-gray-900 truncate">{bid.bidder.name}</div>
+                                                                            {bid.bidder.username && <div className="text-xs text-gray-500 truncate">@{bid.bidder.username}</div>}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <div className={`font-medium text-sm ${bid.isHighest ? "text-green-600" : "text-gray-900"}`}>
+                                                                        {formatCurrency(bid.convertedAmount)}
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-500">{bid.isProxyBid ? "Proxy bid" : "Manual bid"}</div>
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-sm text-gray-900 whitespace-nowrap">
+                                                                    {formatDate(bid.time)}
+                                                                    <span className="block text-xs text-gray-500">{formatTime(bid.time)}</span>
+                                                                </td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <Badge className={BID_STATUS[bid.status] || BID_STATUS.Outbid}>{bid.status}</Badge>
+                                                                </td>
+                                                                {isLive && (
+                                                                    <td className="py-2.5 px-3">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRetract(selectedAuction, bid.bidder)}
+                                                                            disabled={!!retractingBidder || !bid.bidder.id}
+                                                                            className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                                                                            title="Retract all of this bidder's bids on this lot"
+                                                                        >
+                                                                            <Undo2 size={14} />
+                                                                            {retractingBidder === bid.bidder.id ? "Retracting…" : "Retract"}
+                                                                        </button>
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
 
                                         {selectedAuction.retractions?.length > 0 && (
                                             <div className="mt-6">
@@ -542,7 +455,7 @@ function BidHistory() {
                                                     {selectedAuction.retractions.map((r, i) => (
                                                         <li key={i} className="text-sm bg-red-50 border border-red-100 rounded-lg p-3">
                                                             <div className="font-medium text-gray-900">
-                                                                @{r.bidderUsername} · {r.bidCount} bid{r.bidCount === 1 ? '' : 's'} (highest {formatCurrency(r.convertedHighestBid)})
+                                                                @{r.bidderUsername} · {r.bidCount} bid{r.bidCount === 1 ? "" : "s"} (highest {formatCurrency(r.convertedHighestBid)})
                                                             </div>
                                                             <div className="text-xs text-gray-600">
                                                                 {formatDate(r.retractedAt)} {formatTime(r.retractedAt)} · price {formatCurrency(r.convertedPriceBefore)} → {formatCurrency(r.convertedPriceAfter)}
@@ -558,8 +471,8 @@ function BidHistory() {
                             ) : (
                                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                                     <BarChart3 size={48} className="mx-auto text-gray-300 mb-4" />
-                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No Auction Selected</h3>
-                                    <p className="text-gray-500">Select an auction from the list to view its bid history</p>
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No lot selected</h3>
+                                    <p className="text-gray-500">Pick a lot from the list to see its bids.</p>
                                 </div>
                             )}
                         </div>
@@ -569,5 +482,3 @@ function BidHistory() {
         </section>
     );
 }
-
-export default BidHistory;
