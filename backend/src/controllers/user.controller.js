@@ -87,6 +87,23 @@ const generateTokensAndRespond = async (user, req, res, message) => {
   }
 };
 
+// Username for accounts created without one, e.g. "sean4821". Never shown publicly
+// (utils/displayName.js uses the first name); only needs to be unique.
+export const usernameBase = (firstName) =>
+  String(firstName || "bidder")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]/g, "")
+    .slice(0, 16) || "bidder";
+
+const generateUsername = async (firstName) => {
+  const base = usernameBase(firstName);
+  for (let i = 0; i < 8; i++) {
+    const candidate = `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!(await User.exists({ username: candidate }))) return candidate;
+  }
+  return `${base}${Date.now().toString(36)}`;
+};
+
 export const registerUser = async (req, res) => {
   try {
     // ========== STEP 1: Initiate registration ==========
@@ -113,16 +130,25 @@ export const registerUser = async (req, res) => {
     } = req.body;
 
     const normalizedEmail = email?.toLowerCase().trim();
-    const normalizedUsername = username?.toLowerCase().trim();
+    // The short sign-up (bid popup) doesn't ask for a username: make one from the
+    // first name. Bids and proxy bids store a username, so every account needs one.
+    const normalizedUsername = username?.trim()
+      ? username.toLowerCase().trim()
+      : await generateUsername(firstName);
 
-    // Check if user already exists
+    // Check if user already exists. Say which one clashed: a taken username used to
+    // read "already exists", which sent new people to the log-in form.
     const existingUser = await User.findOne({
       $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
     if (existingUser) {
+      const emailTaken = existingUser.email === normalizedEmail;
       return res.status(409).json({
         success: false,
-        message: 'User with this email or username already exists',
+        code: emailTaken ? 'EMAIL_EXISTS' : 'USERNAME_TAKEN',
+        message: emailTaken
+          ? 'An account with this email already exists. Please log in.'
+          : 'That username is taken. Please choose another.',
       });
     }
 

@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import {
-    Mail, Lock, Eye, EyeOff, User, Phone, ChevronDown,
-    Gavel, Store, Building2, FileText, X, Banknote
-} from 'lucide-react';
-import { darkLogo, otherData } from '../assets';
+import { Mail, Lock, Eye, EyeOff, User, ChevronDown, X } from 'lucide-react';
+import { darkLogo } from '../assets';
 import { toast } from 'react-hot-toast';
 import axiosInstance from '../utils/axiosInstance';
 import { useAuth } from '../contexts/AuthContext';
-import useCountryStates from '../hooks/useCountryStates';
 import { getGaClientId, trackEvent } from '../utils/ga.js';
 import { trackMetaRegistration } from '../utils/metaPixel.js';
 import { isNativeApp } from '../native/platform';
 import EmailCodeForm from './auth/EmailCodeForm';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import { hasAccountOnDevice } from '../utils/accountHint.js';
+
+// "Where are you based?" → what the server needs for VAT region and currency.
+const BASED_IN = {
+    ROI: { label: 'Republic of Ireland', countryCode: 'IE', countryName: 'Ireland', currency: 'EUR' },
+    NI: { label: 'Northern Ireland', countryCode: 'GB', countryName: 'Northern Ireland', currency: 'GBP' },
+    GB: { label: 'England, Scotland or Wales', countryCode: 'GB', countryName: 'United Kingdom', currency: 'GBP' },
+};
 
 const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     // Most people who hit this popup are new, so open on "Create account" unless this
@@ -25,28 +28,8 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     // Email still to confirm with the 6-digit code (after sign-up, or a login before confirming).
     const [verifyEmailFor, setVerifyEmailFor] = useState(null);
     const { setUser } = useAuth();
-    const { useCountries } = useCountryStates();
-    const [countries, setCountries] = useState([]);
     const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [userType, setUserType] = useState('bidder');
-    const [selectedCountry, setSelectedCountry] = useState('');
-    const [counties] = useState([
-        "Antrim", "Armagh", "Carlow", "Cavan", "Clare", "Cork", "Derry", "Donegal", "Down",
-        "Dublin", "Fermanagh", "Galway", "Kerry", "Kildare", "Kilkenny", "Laois", "Leitrim",
-        "Limerick", "Longford", "Louth", "Mayo", "Meath", "Monaghan", "Offaly", "Roscommon",
-        "Sligo", "Tipperary", "Tyrone", "Waterford", "Westmeath", "Wexford", "Wicklow"
-    ]);
-    const [selectedCurrency, setSelectedCurrency] = useState('EUR');
-    const currencies = [
-        { code: 'GBP', name: 'Pound Sterling' },
-        { code: 'EUR', name: 'Euro' },
-    ];
-
-    useEffect(() => {
-        useCountries().then(setCountries).catch(() => { });
-    }, []);
 
     // Funnel tracking: the login/register wall shown when a guest tries to bid/offer
     const gateAction = pendingAction?.type || 'bid';
@@ -135,7 +118,6 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const {
         register: regRegister,
         handleSubmit: handleRegSubmit,
-        watch: regWatch,
         setValue: regSetValue,
         formState: { errors: regErrors },
     } = useForm({
@@ -143,12 +125,11 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             email: '', phone: '', password: '', confirmPassword: '',
             username: '', firstName: '', lastName: '',
             line1: '', line2: '', county: '', postCode: '',
-            country: '', currency: 'EUR', userType: 'bidder',
+            country: 'ROI', currency: 'EUR', userType: 'bidder',
             companyName: '', companyVATNumber: '', termsConditions: false,
         },
     });
 
-    const password = regWatch('password');
 
     const onRegister = async (data) => {
         try {
@@ -162,9 +143,11 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             formData.append('password', data.password);
             formData.append('username', data.username);
             formData.append('userType', data.userType);
-            formData.append('countryCode', data.country);
-            formData.append('countryName', countries.find(c => c.code === data.country)?.name || data.country);
-            formData.append('currency', data.currency || 'EUR');
+            const based = BASED_IN[data.country] || BASED_IN.ROI;
+            formData.append('countryCode', based.countryCode);
+            formData.append('countryName', based.countryName);
+            // Currency follows where they're based; it can be changed later in the profile.
+            formData.append('currency', based.currency);
             formData.append('line1', data.line1 || '');
             formData.append('line2', data.line2 || '');
             formData.append('county', data.county || '');
@@ -212,7 +195,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             onAuthSuccess(user);
         } catch (err) {
             const msg = err?.response?.data?.message || '';
-            if (/already exists/i.test(msg)) {
+            if (err?.response?.data?.code === 'EMAIL_EXISTS' || /already exists/i.test(msg)) {
                 trackEvent('bid_auth_gate_error', { action: gateAction, auth_method: 'register', reason: 'already_exists' });
                 toast.error('You already have an account with that email. Log in instead.');
                 loginSetValue('email', data.email.toLowerCase().trim());
@@ -350,167 +333,50 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
 
                     {!verifyEmailFor && activeTab === 'register' && (
                         <form onSubmit={handleRegSubmit(onRegister)} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <Input label="Email *" placeholder="Enter your email" icon={<Mail size={18} />} error={regErrors.email?.message}
-                                    {...regRegister('email', { required: 'Email required' })} />
-                                <Input label="Phone *" placeholder={`e.g., ${otherData?.phoneCode}1234XXXX`} icon={<Phone size={18} />} error={regErrors.phone?.message}
-                                    {...regRegister('phone', { required: 'Phone required' })} />
-                                <div>
-                                    <label className="text-xs font-medium">Password *</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? 'text' : 'password'}
-                                            {...regRegister('password', { required: 'Password required', minLength: { value: 6, message: 'Min 6 chars' } })}
-                                            className="w-full pl-3 pr-10 py-2 border rounded-lg text-sm"
-                                            placeholder="Enter your password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword((v) => !v)}
-                                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                        </button>
-                                    </div>
-                                    {regErrors.password && <p className="text-red-500 text-xs mt-1">{regErrors.password.message}</p>}
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium">Confirm Password *</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showConfirmPassword ? 'text' : 'password'}
-                                            {...regRegister('confirmPassword', { validate: (v) => v === password || 'Passwords do not match' })}
-                                            className="w-full pl-3 pr-10 py-2 border rounded-lg text-sm"
-                                            placeholder="Confirm your password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowConfirmPassword((v) => !v)}
-                                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                                        >
-                                            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                        </button>
-                                    </div>
-                                    {regErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{regErrors.confirmPassword.message}</p>}
-                                </div>
-                            </div>
-
-                            {/* User type */}
-                            <div>
-                                <p className="text-sm font-medium mb-2">I am a…</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {[
-                                        { key: 'bidder', label: 'Bidder', icon: Gavel },
-                                        { key: 'seller', label: 'Seller', icon: Store },
-                                        { key: 'company', label: 'Company', icon: Building2 },
-                                    ].map(({ key, label, icon: Icon }) => (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() => { setUserType(key); regSetValue('userType', key); }}
-                                            className={`flex flex-col items-center gap-1 p-3 border rounded-lg text-xs ${userType === key ? 'border-[#D19F3E] bg-orange-50' : 'border-gray-200'
-                                                }`}
-                                        >
-                                            <Icon size={20} />
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {userType === 'company' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <Input label="Company Name *" placeholder="Enter company name" icon={<Building2 size={18} />} error={regErrors.companyName?.message}
-                                        {...regRegister('companyName', { required: userType === 'company' })} />
-                                    <Input label="VAT Number" placeholder="Enter VAT number (optional)" icon={<FileText size={18} />} {...regRegister('companyVATNumber')} />
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <Input label="First Name *" placeholder={userType === 'company' ? "Contact's first name" : "First name"} error={regErrors.firstName?.message}
+                            {/* Short form: only what's needed to bid. Phone and address are asked for
+                                later (when they're needed for a sale), not before the first bid. */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input label="First name *" placeholder="First name" autoComplete="given-name" error={regErrors.firstName?.message}
                                     {...regRegister('firstName', { required: 'Required' })} />
-                                <Input label="Last Name *" placeholder={userType === 'company' ? "Contact's last name" : "Last name"} error={regErrors.lastName?.message}
+                                <Input label="Last name *" placeholder="Last name" autoComplete="family-name" error={regErrors.lastName?.message}
                                     {...regRegister('lastName', { required: 'Required' })} />
-                                <div className="md:col-span-2">
-                                    <Input label="Username *" placeholder="Choose a username" icon={<User size={18} />} error={regErrors.username?.message}
-                                        {...regRegister('username', { required: 'Required' })} />
-                                </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                    <label className="text-xs font-medium">Country *</label>
-                                    <div className="relative">
-                                        <select
-                                            {...regRegister('country', { required: 'Required' })}
-                                            value={selectedCountry}
-                                            onChange={(e) => {
-                                                setSelectedCountry(e.target.value);
-                                                regSetValue('country', e.target.value);
-                                            }}
-                                            className="w-full p-2 border rounded-lg text-sm appearance-none"
-                                        >
-                                            <option value="">Select country</option>
-                                            {countries.map((c) => (
-                                                <option key={c.code} value={c.code}>{c.name}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown size={16} className="absolute right-2 top-3 text-gray-400 pointer-events-none" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium">County *</label>
-                                    <div className="relative">
-                                        <select
-                                            {...regRegister('county', {
-                                                required: selectedCountry ? 'County is required' : false,
-                                            })}
-                                            className="w-full p-2 border rounded-lg text-sm appearance-none"
-                                            disabled={!selectedCountry}
-                                        >
-                                            <option value="">Select county</option>
-                                            {counties.map((county) => (
-                                                <option key={county} value={county}>
-                                                    {county}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown
-                                            size={16}
-                                            className="absolute right-2 top-3 text-gray-400 pointer-events-none"
-                                        />
-                                    </div>
-                                </div>
-                                <Input label="Post Code *" placeholder="Postal code" {...regRegister('postCode', { required: 'Required' })} />
-                            </div>
+                            <Input label="Email *" type="email" placeholder="you@example.com" autoComplete="email" icon={<Mail size={18} />} error={regErrors.email?.message}
+                                {...regRegister('email', { required: 'Email required' })} />
 
-                            <div className="grid grid-cols-1 md:grid-cols-1 gap-3">
-                                <Input label="Address Line 1" placeholder="Address Line 1" {...regRegister('line1')} />
-                                <Input label="Address Line 2" placeholder="Address Line 2" {...regRegister('line2')} />
+                            <div>
+                                <label className="text-xs font-medium">Password *</label>
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        {...regRegister('password', { required: 'Password required', minLength: { value: 6, message: 'At least 6 characters' } })}
+                                        className="w-full pl-3 pr-10 py-3 border rounded-lg text-sm"
+                                        placeholder="At least 6 characters"
+                                    />
+                                    <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-3" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                                {regErrors.password && <p className="text-red-500 text-xs mt-1">{regErrors.password.message}</p>}
                             </div>
 
                             <div>
-                                <label className="text-xs font-medium flex items-center gap-1">
-                                    <Banknote size={14} /> Currency *
-                                </label>
+                                {/* One question instead of country + county + post code: it sets the
+                                    VAT region (utils/region.js on the server) and the currency. */}
+                                <label className="text-xs font-medium">Where are you based? *</label>
                                 <div className="relative">
                                     <select
-                                        {...regRegister('currency', { required: 'Currency is required' })}
-                                        value={selectedCurrency}
-                                        onChange={(e) => {
-                                            setSelectedCurrency(e.target.value);
-                                            regSetValue('currency', e.target.value);
-                                        }}
-                                        className="w-full p-2 border rounded-lg text-sm appearance-none"
+                                        {...regRegister('country', { required: 'Required' })}
+                                        className="w-full p-3 border rounded-lg text-sm appearance-none"
                                     >
-                                        <option value="">Select currency</option>
-                                        {currencies.map((c) => (
-                                            <option key={c.code} value={c.code}>{c.name}</option>
+                                        {Object.entries(BASED_IN).map(([key, b]) => (
+                                            <option key={key} value={key}>{b.label}</option>
                                         ))}
                                     </select>
-                                    <ChevronDown size={16} className="absolute right-2 top-3 text-gray-400 pointer-events-none" />
+                                    <ChevronDown size={16} className="absolute right-3 top-4 text-gray-400 pointer-events-none" />
                                 </div>
-                                {regErrors.currency && <p className="text-red-500 text-xs mt-1">{regErrors.currency.message}</p>}
                             </div>
 
                             <label className="flex items-start gap-2 text-xs text-gray-600">
@@ -524,8 +390,12 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                                 disabled={isLoading}
                                 className="w-full bg-[#001a35] text-white py-3 rounded-lg font-semibold disabled:opacity-50"
                             >
-                                {isLoading ? 'Creating account…' : 'Create Account & Continue'}
+                                {isLoading ? 'Creating account…' : 'Create account & continue'}
                             </button>
+
+                            <p className="text-xs text-gray-500 text-center">
+                                Selling, or registering a company? <a href="/register" className="underline text-[#A17B35]">Use the full sign-up form</a>
+                            </p>
                         </form>
                     )}
                 </div>
