@@ -2,6 +2,7 @@ import { StripeService } from '../services/stripeService.js';
 import User from '../models/user.model.js';
 import Auction from '../models/auction.model.js';
 import { getCachedRates } from '../routes/currency.route.js';
+import { retractBids } from '../services/bidRetractionService.js';
 
 const convertPrice = (auction, targetCurrency, priceField) => {
     const rates = getCachedRates();
@@ -772,6 +773,15 @@ export const getAdminBidHistory = async (req, res) => {
                     name: `${auction.winner.firstName} ${auction.winner.lastName}`.trim() || auction.winner.username || auction.winner?.companyName
                 } : null,
                 totalBids: auction.bidCount,
+                retractions: (auction.retractedBids || []).map(r => ({
+                    bidderUsername: r.bidderUsername,
+                    bidCount: r.bids?.length || 0,
+                    convertedHighestBid: convertAmount(Math.max(0, ...(r.bids || []).map(b => b.amount || 0)), auction),
+                    convertedPriceBefore: convertAmount(r.priceBefore, auction),
+                    convertedPriceAfter: convertAmount(r.priceAfter, auction),
+                    reason: r.reason,
+                    retractedAt: r.retractedAt,
+                })),
                 uniqueBidders: new Set(auction.bids.map(bid => bid.bidder?._id.toString())).size,
                 bids: bidsWithStatus,
                 createdAt: auction.createdAt
@@ -955,5 +965,51 @@ export const getAdminBidStats = async (req, res) => {
             success: false,
             message: 'Internal server error while fetching bid statistics'
         });
+    }
+};
+/**
+ * @desc    Admin retracts all of a bidder's bids on a live lot (e.g. a bidder
+ *          withdrawing under s.58(2) Sale of Goods Act 1893 before close).
+ *          Their proxy bid is switched off and the remaining bids re-compete.
+ * @route   POST /api/v1/bids/admin/auctions/:auctionId/retract
+ * @body    { bidderId: string, reason?: string }
+ * @access  Admin
+ */
+export const retractBidderBids = async (req, res) => {
+    try {
+        const { auctionId } = req.params;
+        const { bidderId, reason } = req.body || {};
+
+        if (!bidderId) {
+            return res.status(400).json({ success: false, message: "bidderId is required" });
+        }
+
+        const result = await retractBids({ auctionId, bidderId, reason, admin: req.user });
+        const a = result.auction;
+
+        console.log(
+            `Bid retraction: admin ${req.user?._id} retracted ${result.removedCount} bid(s) by ${bidderId} on ${auctionId}` +
+            ` (${result.previousPrice} -> ${a.currentPrice})`
+        );
+
+        res.status(200).json({
+            success: true,
+            message: result.removedCount
+                ? `Retracted ${result.removedCount} bid${result.removedCount === 1 ? "" : "s"}.`
+                : "Proxy bid switched off.",
+            data: {
+                auctionId: a._id,
+                removedCount: result.removedCount,
+                previousPrice: result.previousPrice,
+                currentPrice: a.currentPrice,
+                currentBidder: a.currentBidder,
+                bidCount: a.bidCount,
+                reserveMet: !(a.auctionType === "reserve" && Number(a.reservePrice) > 0) || a.currentPrice >= a.reservePrice,
+            },
+        });
+    } catch (error) {
+        console.error("Retract bid error:", error);
+        const status = error.message === "Auction not found" ? 404 : 400;
+        res.status(status).json({ success: false, message: error.message || "Failed to retract bid" });
     }
 };
