@@ -501,6 +501,20 @@ export const stripeMoney = async (req, res) => {
     }
 };
 
+/** Monthly accounts spreadsheet for the accountant (?month=YYYY-MM). */
+export const accountsPack = async (req, res) => {
+    try {
+        const { buildMonthlyPack } = await import("../services/accountsService.js");
+        const month = String(req.query.month || "");
+        const xlsx = await buildMonthlyPack(month);
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="RexBid-accounts-${month}.xlsx"`);
+        res.send(xlsx);
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
 export const commissionPayments = async (req, res) => {
     try {
         const { getCommissionLedger } = await import("../services/commissionLedgerService.js");

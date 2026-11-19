@@ -4,7 +4,7 @@
 // been sent is recorded per payment, so nothing is sent twice.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckSquare, Landmark, Loader2, RefreshCw, Send, AlertTriangle } from "lucide-react";
+import { CheckSquare, Landmark, Loader2, RefreshCw, Send, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import toast from "react-hot-toast";
 import { AdminContainer, AdminHeader, AdminSidebar } from "../../components";
 import axiosInstance from "../../utils/axiosInstance";
@@ -14,6 +14,57 @@ const money = (n, cur) => `${cur === "GBP" ? "£" : "€"}${Number(n || 0).toLoc
 const day = (d) => (d ? new Date(d).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "—");
 const STATUS = { paid: "Awaiting collection", collected: "Partly confirmed", payout_due: "Payout due" };
 const KIND = { sale: "Sale", fee: "RexBid fee", check: "Check" };
+
+const lastMonth = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+/** Monthly accounts spreadsheet for the accountant. */
+function AccountsDownload() {
+    const [month, setMonth] = useState(lastMonth());
+    const [busy, setBusy] = useState(false);
+    const download = async () => {
+        setBusy(true);
+        try {
+            const res = await axiosInstance.get(`/api/v1/admin/sales/stripe-money/accounts?month=${month}`, { responseType: "blob" });
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `RexBid-accounts-${month}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch (e) {
+            let msg = "Couldn't make the spreadsheet";
+            try { msg = JSON.parse(await e?.response?.data?.text?.())?.message || msg; } catch { /* keep default */ }
+            toast.error(msg);
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <div className="bg-white border rounded-xl p-4 mb-6 flex flex-col md:flex-row md:items-end gap-3">
+            <div className="flex-1">
+                <div className="font-semibold flex items-center gap-2"><FileSpreadsheet size={18} /> Accounts for the accountant</div>
+                <p className="text-xs text-gray-500 mt-1">
+                    One spreadsheet per month: summary, income by payment (commission, Featured / Meta fees, sellers&rsquo; money),
+                    payouts to BOI and what each came from, Stripe&rsquo;s fees and VAT, refunds and seller payouts.
+                </p>
+            </div>
+            <label className="text-sm">
+                <span className="text-gray-600 block">Month</span>
+                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="mt-1 border rounded-lg p-2" />
+            </label>
+            <button onClick={download} disabled={busy || !month} className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-secondary text-white disabled:opacity-40">
+                {busy ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />} Download spreadsheet
+            </button>
+        </div>
+    );
+}
 
 const Tile = ({ label, value, hint, strong }) => (
     <div className={`rounded-xl border p-4 ${strong ? "bg-green-50 border-green-200" : "bg-white"}`}>
@@ -151,6 +202,8 @@ export default function StripeMoney() {
                                     <Tile label="Still clearing" value={eur(summary.pending)} hint="Not available yet" />
                                     <Tile label="Held for sellers" value={eur(summary.heldForSellers)} hint="Sales not yet paid out" />
                                 </div>
+
+                                <AccountsDownload />
 
                                 {mismatch && (
                                     <div className="mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

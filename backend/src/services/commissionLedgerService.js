@@ -44,7 +44,7 @@ export const connectFeeFor = (sellerAmount, f = CONNECT_FEES) =>
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const idOf = (v) => (v && typeof v === "object" ? v.id : v) || null;
 
-const listAll = async (resource, params) => {
+export const listAll = async (resource, params) => {
     const out = [];
     let starting_after;
     for (let page = 0; page < 30; page++) {
@@ -175,7 +175,7 @@ export const getCommissionLedger = async ({ now = new Date() } = {}) => {
         stripe.balance.retrieve(),
         listAll(stripe.charges, { created: { gte: since } }),
         listAll(stripe.balanceTransactions, { created: { gte: since } }),
-        Sale.find({}, "reference title status currency itemPrice vat sellerFee total auction payment stripe").lean(),
+        Sale.find({}, "reference title status currency itemPrice vat sellerFee buyerFee total auction payment payout stripe saleDate seller.name seller.companyName").lean(),
         CommissionTransfer.find({}).lean(),
     ]);
     const ledger = buildLedger({ charges, balanceTxns, sales, transfers, now });
