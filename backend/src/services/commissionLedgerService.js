@@ -102,6 +102,7 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
         let sellerShare = 0;
         let connectFee = 0;
         let sellerViaBank = false;
+        let shortfall = 0;
         let known = true;
         if (sale) {
             description = `${sale.reference} ${sale.title || ""}`.trim();
@@ -112,6 +113,9 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
                 const method = sale.payout?.method;
                 sellerViaBank = method === "bank_transfer" || (method !== "stripe_connect" && txn.amount / 100 > BANK_PAYOUT_OVER);
                 connectFee = sellerViaBank ? 0 : connectFeeFor(sellerShare);
+                // Buyer paid less than the sale total (e.g. VAT not charged at card checkout).
+                const expected = round2((sale.total || 0) * saleRate);
+                if (expected - txn.amount / 100 > 0.5) shortfall = round2(expected - txn.amount / 100);
             }
         } else if (REXBID_ONLY.has(kind)) {
             description = KIND_LABEL[kind] || "RexBid fee";
@@ -136,6 +140,7 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
             refunded,
             sellerShare,
             connectFee,
+            shortfall,
             sellerViaBank,
             sellerToBank,
             rexbidShare: share,

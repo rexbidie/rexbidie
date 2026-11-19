@@ -391,9 +391,11 @@ const CheckoutContent = () => {
     // `auction.commissionAmount` is the bidder's commission (0 if bidder doesn't pay)
     const calculateTotal = () => {
         if (!auction) return 0;
+        // The server works out the total, including VAT where it applies.
+        if (auction.totalAmount != null) return auction.totalAmount;
         const winningBid = auction.finalPrice || auction.currentPrice || 0;
         const commission = auction.commissionAmount || 0;
-        return winningBid + commission;
+        return winningBid + commission + (auction.vatAmount || 0);
     };
 
     // Format currency
@@ -636,6 +638,13 @@ const CheckoutContent = () => {
                                             <span className="font-medium">{formatCurrency(auction.finalPrice || 0)}</span>
                                         </div>
 
+                                        {auction.vatAmount > 0 && (
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">VAT ({auction.vatRate}%)</span>
+                                                <span className="font-medium">{formatCurrency(auction.vatAmount)}</span>
+                                            </div>
+                                        )}
+
                                         {auction.commissionAmount > 0 && (
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Commission Fee</span>
@@ -660,7 +669,7 @@ const CheckoutContent = () => {
                                                 handleBankTransfer();
                                             }
                                         }}
-                                        disabled={processing}
+                                        disabled={processing || (paymentMethod === 'stripe' && auction.vatReviewRequired)}
                                         className="w-full bg-primary text-white hover:bg-primary/90 py-3 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {processing ? (
@@ -677,11 +686,16 @@ const CheckoutContent = () => {
                                     </button>
 
                                     {/* VAT Note */}
+                                    {auction?.vatReviewRequired && (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3 text-sm text-amber-900">
+                                            We need to confirm the VAT on this purchase before you can pay. We&rsquo;ll email you a payment request shortly.
+                                        </div>
+                                    )}
                                     {auction?.vatIncluded && (
                                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
                                             <p className="text-sm text-gray-500 flex items-start gap-2">
                                                 <Info size={16} className="flex-shrink-0 mt-0.5" />
-                                                <span>VAT is applicable on this purchase.</span>
+                                                <span>{auction.vatAmount > 0 ? "VAT is included in the total above." : auction.vatTreatment === "zero_rated" ? "VAT is zero-rated on this purchase." : "VAT is applicable on this purchase."}</span>
                                             </p>
                                         </div>
                                     )}

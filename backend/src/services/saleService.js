@@ -90,6 +90,38 @@ export const isCardCheckoutAvailable = (itemPrice, currency) =>
 
 export const cardCheckoutUrl = (auctionId) => `${FRONTEND_URL}/checkout/${auctionId}`;
 
+/**
+ * What the winner pays at the card checkout: the same as the Sales page
+ * (winning bid + VAT where it applies + buyer fee), in the lot's currency.
+ * Uses the sale record if there is one (it holds any VAT decision), otherwise
+ * works it out the same way. reviewRequired: VAT needs an admin's decision
+ * first, so the card checkout must wait.
+ */
+export const checkoutFiguresFor = async (auctionOrId) => {
+    const auctionId = auctionOrId?._id || auctionOrId;
+    let sale = await Sale.findOne({ auction: auctionId }).lean();
+    if (!sale) {
+        const auction = await Auction.findById(auctionId).lean();
+        if (!auction) throw Object.assign(new Error("Auction not found"), { status: 404 });
+        const [buyer, seller] = await Promise.all([
+            User.findById(auction.winner).select(USER_FIELDS).lean(),
+            User.findById(auction.seller).select(USER_FIELDS).lean(),
+        ]);
+        sale = buildSale(auction, buyer, seller);
+    }
+    return {
+        currency: sale.currency,
+        itemPrice: sale.itemPrice,
+        vatAmount: sale.vat?.amount || 0,
+        vatRate: sale.vat?.rate || 0,
+        vatTreatment: sale.vat?.treatment || "not_applicable",
+        buyerFee: sale.buyerFee || 0,
+        total: sale.total,
+        reviewRequired: !!sale.vat?.reviewRequired,
+    };
+};
+
+
 const methodLabel = (m) =>
     ({ credit_card: "card", bank_transfer: "bank transfer", paypal: "PayPal" })[m] || m || "other";
 

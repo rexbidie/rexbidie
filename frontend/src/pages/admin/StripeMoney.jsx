@@ -278,6 +278,11 @@ export default function StripeMoney() {
                                                                             <span className={`mr-1 rounded px-1.5 py-0.5 ${r.kind === "check" ? "bg-amber-100 text-amber-800" : "bg-gray-100"}`}>{KIND[r.kind]}</span>
                                                                             Paid {day(r.created)}{r.refunded > 0 ? ` · ${eur(r.refunded)} refunded` : ""}{r.settled ? " · marked as dealt with" : ""}
                                                                         </div>
+                                                                        {r.shortfall > 0 && (
+                                                                            <div className="mt-1 text-xs font-medium text-red-700">
+                                                                                Buyer paid {eur(r.shortfall)} less than the sale total (e.g. VAT not charged). Collect the rest or correct the VAT on the Sales page.
+                                                                            </div>
+                                                                        )}
                                                                     </td>
                                                                     <td className="p-2 text-right">{eur(r.paid)}</td>
                                                                     <td className="p-2 text-right text-gray-500">−{eur(r.stripeFee)}</td>

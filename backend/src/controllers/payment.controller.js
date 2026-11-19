@@ -61,10 +61,19 @@ export const createWonAuctionPayment = async (req, res) => {
 
         const commissionSettings = await getCommissionSettings();
 
-        // Calculate total amount (finalPrice + commission)
+        // Calculate total amount (finalPrice + VAT + commission)
         const bidAmount = auction.finalPrice || auction.currentPrice;
         const commissionAmount = auction.bidderCommissionAmount || 0;
-        const totalAmount = bidAmount + commissionAmount;
+        // Same total as the Sales page: winning bid + VAT (where it applies) + buyer fee.
+        const { checkoutFiguresFor } = await import("../services/saleService.js");
+        const figures = await checkoutFiguresFor(auction._id);
+        if (figures.reviewRequired) {
+            return res.status(409).json({
+                success: false,
+                message: "We need to confirm the VAT on this purchase first. We'll email you a payment request shortly.",
+            });
+        }
+        const totalAmount = figures.total;
         // Check if payment record already exists
         let bidPayment = await BidPayment.findOne({
             auction: auctionId,
@@ -580,8 +589,16 @@ export const createCheckoutPayment = async (req, res) => {
         // 3. Calculate total in base currency (original)
         const bidAmount = auction.finalPrice || auction.currentPrice;
         const commissionAmount = auction.bidderCommissionAmount || 0;
-        // bidderCommissionAmount is 0 when bidder is not in appliesTo.
-        const totalAmountInBase = bidAmount + commissionAmount;
+        // Same total as the Sales page: winning bid + VAT (where it applies) + buyer fee.
+        const { checkoutFiguresFor } = await import("../services/saleService.js");
+        const figures = await checkoutFiguresFor(auction._id);
+        if (figures.reviewRequired) {
+            return res.status(409).json({
+                success: false,
+                message: "We need to confirm the VAT on this purchase first. We'll email you a payment request shortly.",
+            });
+        }
+        const totalAmountInBase = figures.total;
 
         // Convert to user's currency before charging
         const totalAmountConverted = convertAmount(totalAmountInBase, auction);
