@@ -151,6 +151,13 @@ export const paySeller = async (saleId, admin, { balanceCache } = {}) => {
 
     const amount = netPayout(sale);
     if (!(amount > 0)) throw fail("Nothing to pay");
+    // Big sales are paid from BOI to avoid Stripe Connect fees.
+    const { BANK_PAYOUT_OVER } = await import("./commissionLedgerService.js");
+    const { getCachedRates } = await import("../routes/currency.route.js");
+    const totalEur = sale.currency === "EUR" ? sale.total : sale.total * (Number(getCachedRates()?.[sale.currency]?.rates?.EUR) || 1);
+    if (totalEur > BANK_PAYOUT_OVER) {
+        throw fail(`Sales over €${BANK_PAYOUT_OVER.toLocaleString("en-IE")} are paid from BOI to avoid Stripe Connect fees: pay the seller from BOI, then use "Record payout"`);
+    }
     const cents = Math.round(amount * 100);
     const currency = sale.currency.toLowerCase();
 
