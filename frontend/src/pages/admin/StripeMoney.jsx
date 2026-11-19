@@ -133,13 +133,20 @@ export default function StripeMoney() {
                             after Stripe&rsquo;s fee). Once a payment clears, RexBid&rsquo;s share can go to BOI. Tick the payments and press <strong>Send to BOI</strong>;
                             each payment&rsquo;s commission is only ever sent once.
                         </p>
+                        {ledger && (
+                            <p className="text-xs text-gray-500 -mt-3 mb-5">
+                                Stripe Connect fees for paying each seller through Stripe ({(ledger.connectFees.pct * 100).toFixed(2)}% + €{ledger.connectFees.perPayout.toFixed(2)} payout fee
+                                + €{ledger.connectFees.activeAccount.toFixed(2)} account fee, plus {Math.round(ledger.connectFees.vat * 100)}% VAT) stay in Stripe to cover Stripe&rsquo;s monthly bill.
+                                Payments over €{ledger.bankPayoutOver.toLocaleString("en-IE")} have no Connect fees: the seller is paid from BOI, so their share is sent to BOI too.
+                            </p>
+                        )}
 
                         {!ledger || !summary ? (
                             <div className="py-20 text-center text-gray-500">{loading ? "Loading…" : "Nothing to show"}</div>
                         ) : (
                             <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                                    <Tile strong label="Ready to send today" value={eur(ledger.sendableNow)} hint={ledger.sendableNow < ledger.readyNow ? `${eur(ledger.readyNow)} ready, limited by the balance` : "RexBid's share of cleared payments"} />
+                                    <Tile strong label="Ready to send today" value={eur(ledger.sendableNow)} hint={ledger.sendableNow < ledger.readyNow ? `${eur(ledger.readyNow)} ready, limited by the balance` : ledger.readyForSellersViaBank > 0 ? `Incl. ${eur(ledger.readyForSellersViaBank)} for sellers paid from BOI` : "RexBid's share of cleared payments"} />
                                     <Tile label="Available in Stripe" value={eur(summary.available)} hint={`€${ledger.buffer} always kept back`} />
                                     <Tile label="Still clearing" value={eur(summary.pending)} hint="Not available yet" />
                                     <Tile label="Held for sellers" value={eur(summary.heldForSellers)} hint="Sales not yet paid out" />
@@ -188,7 +195,8 @@ export default function StripeMoney() {
                                                         <span className="font-normal text-gray-500 text-sm">· {list.length} payment{list.length === 1 ? "" : "s"}</span>
                                                     </label>
                                                     <span className="text-sm">
-                                                        RexBid&rsquo;s to send: <strong className={cleared ? "text-green-800" : "text-gray-700"}>{eur(t?.toSend)}</strong>
+                                                        To send: <strong className={cleared ? "text-green-800" : "text-gray-700"}>{eur(t?.toSend)}</strong>
+                                                        {t?.forSellersViaBank > 0 && <span className="text-blue-700"> (incl. {eur(t.forSellersViaBank)} for sellers paid from BOI)</span>}
                                                         {!cleared && <span className="text-gray-500"> (from {day(date)})</span>}
                                                     </span>
                                                 </div>
@@ -201,6 +209,7 @@ export default function StripeMoney() {
                                                                 <th className="p-2 text-right">Paid</th>
                                                                 <th className="p-2 text-right">Stripe fee</th>
                                                                 <th className="p-2 text-right">Seller&rsquo;s share</th>
+                                                                <th className="p-2 text-right" title="Stripe Connect fees for paying the seller through Stripe: 0.25% + €0.10 + €2 account fee, plus VAT">Connect fees</th>
                                                                 <th className="p-2 text-right">RexBid&rsquo;s share</th>
                                                                 <th className="p-2 text-right">Already sent</th>
                                                                 <th className="p-2 text-right">To send</th>
@@ -219,7 +228,11 @@ export default function StripeMoney() {
                                                                     </td>
                                                                     <td className="p-2 text-right">{eur(r.paid)}</td>
                                                                     <td className="p-2 text-right text-gray-500">−{eur(r.stripeFee)}</td>
-                                                                    <td className="p-2 text-right text-gray-500">{r.kind === "check" ? "?" : r.sellerShare ? `−${eur(r.sellerShare)}` : "—"}</td>
+                                                                    <td className="p-2 text-right text-gray-500">
+                                                                        {r.kind === "check" ? "?" : r.sellerShare ? `−${eur(r.sellerShare)}` : "—"}
+                                                                        {r.sellerViaBank && <div className="text-[11px] text-blue-700">paid from BOI: sent with it</div>}
+                                                                    </td>
+                                                                    <td className="p-2 text-right text-gray-500">{r.connectFee ? `−${eur(r.connectFee)}` : "—"}</td>
                                                                     <td className="p-2 text-right">{r.rexbidShare == null ? "?" : eur(r.rexbidShare)}</td>
                                                                     <td className="p-2 text-right text-gray-500">{r.alreadySent ? eur(r.alreadySent) : "—"}</td>
                                                                     <td className={`p-2 text-right font-semibold ${r.toSend > 0 ? (r.cleared ? "text-green-800" : "text-gray-700") : "text-gray-400"}`}>{eur(r.toSend)}</td>
@@ -291,6 +304,7 @@ export default function StripeMoney() {
                             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
                                 <div className="text-sm">
                                     <strong>{picked.length}</strong> ticked · <strong className="text-green-800">{eur(sendTotal)}</strong> ready to send
+                                    {sendable.some((r) => r.sellerViaBank) && <span className="text-blue-700"> (incl. {eur(sendable.reduce((n, r) => n + Math.min(r.toSend, r.sellerToBank || 0), 0))} to pay sellers from BOI)</span>}
                                     {picked.length > sendable.length && <span className="text-gray-500"> ({picked.length - sendable.length} not cleared yet or nothing to send)</span>}
                                 </div>
                                 <div className="flex gap-2">

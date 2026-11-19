@@ -24,6 +24,23 @@ export const TRACKING_START = new Date(process.env.COMMISSION_TRACKING_START || 
 const REXBID_ONLY = new Set(["listing_extras", "listing_extras_prepaid", "listing_promotion", "seller_commission", "bid_commission", "final_commission"]);
 const SETTLED_SALE = ["failed", "cancelled"];
 
+// Stripe Connect fees for paying a seller through Stripe, billed to RexBid
+// monthly plus VAT: 0.25% of the payout, about €0.10 per bank payout and €2
+// per seller account paid that month (set aside per sale, so it's never short).
+const num = (v, d) => (Number.isFinite(Number(v)) && v !== "" && v != null ? Number(v) : d);
+export const CONNECT_FEES = {
+    pct: num(process.env.CONNECT_FEE_PCT, 0.0025),
+    perPayout: num(process.env.CONNECT_FEE_PER_PAYOUT, 0.1),
+    activeAccount: num(process.env.CONNECT_FEE_ACTIVE_ACCOUNT, 2),
+    vat: num(process.env.CONNECT_FEE_VAT, 0.23),
+};
+// Payments over this are paid to the seller from BOI instead (no Connect fees),
+// so the seller's share goes to BOI along with RexBid's.
+export const BANK_PAYOUT_OVER = num(process.env.BANK_PAYOUT_OVER, 15000);
+
+export const connectFeeFor = (sellerAmount, f = CONNECT_FEES) =>
+    sellerAmount > 0 ? round2((sellerAmount * f.pct + f.perPayout + f.activeAccount) * (1 + f.vat)) : 0;
+
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const idOf = (v) => (v && typeof v === "object" ? v.id : v) || null;
 
@@ -83,12 +100,18 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
 
         let description;
         let sellerShare = 0;
+        let connectFee = 0;
+        let sellerViaBank = false;
         let known = true;
         if (sale) {
             description = `${sale.reference} ${sale.title || ""}`.trim();
             if (!SETTLED_SALE.includes(sale.status)) {
                 const saleRate = sale.currency === "EUR" ? 1 : sale.total > 0 ? txn.amount / Math.round(sale.total * 100) : rate;
                 sellerShare = round2(netPayout(sale) * saleRate);
+                // Big sales (or ones already paid from the bank) go to the seller from BOI.
+                const method = sale.payout?.method;
+                sellerViaBank = method === "bank_transfer" || (method !== "stripe_connect" && txn.amount / 100 > BANK_PAYOUT_OVER);
+                connectFee = sellerViaBank ? 0 : connectFeeFor(sellerShare);
             }
         } else if (REXBID_ONLY.has(kind)) {
             description = KIND_LABEL[kind] || "RexBid fee";
@@ -97,9 +120,11 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
             known = false;
         }
 
-        const share = known ? Math.max(0, round2(net - sellerShare)) : null;
+        const share = known ? Math.max(0, round2(net - sellerShare - connectFee)) : null;
+        // Sent to BOI: RexBid's share, plus the seller's when they're paid from BOI.
+        const sellerToBank = sellerViaBank ? sellerShare : 0;
         const s = sent.get(c.id) || { amount: 0, settled: false };
-        const toSend = known && !s.settled ? Math.max(0, round2(share - s.amount)) : 0;
+        const toSend = known && !s.settled ? Math.max(0, round2(share + sellerToBank - s.amount)) : 0;
         rows.push({
             chargeId: c.id,
             created: new Date(c.created * 1000).toISOString(),
@@ -110,6 +135,9 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
             stripeFee: fee,
             refunded,
             sellerShare,
+            connectFee,
+            sellerViaBank,
+            sellerToBank,
             rexbidShare: share,
             alreadySent: round2(s.amount),
             settled: s.settled,
@@ -123,8 +151,9 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
     const days = new Map();
     for (const r of rows) {
         const k = r.availableOn.slice(0, 10);
-        const d = days.get(k) || { date: k, cleared: r.cleared, toSend: 0, payments: 0 };
+        const d = days.get(k) || { date: k, cleared: r.cleared, toSend: 0, forSellersViaBank: 0, payments: 0 };
         d.toSend = round2(d.toSend + r.toSend);
+        if (r.toSend > 0) d.forSellersViaBank = round2(d.forSellersViaBank + Math.min(r.toSend, r.sellerToBank));
         d.payments += 1;
         days.set(k, d);
     }
@@ -133,6 +162,9 @@ export const buildLedger = ({ charges, balanceTxns, sales, transfers, now = new 
         rows,
         days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
         readyNow,
+        readyForSellersViaBank: round2(rows.filter((r) => r.cleared && r.toSend > 0).reduce((n, r) => n + Math.min(r.toSend, r.sellerToBank), 0)),
+        connectFees: CONNECT_FEES,
+        bankPayoutOver: BANK_PAYOUT_OVER,
         toCheck: rows.filter((r) => r.kind === "check" && !r.settled).length,
     };
 };

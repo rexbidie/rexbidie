@@ -28,27 +28,42 @@ const sales = [
 test("each payment is split into the seller's and RexBid's share", () => {
     const l = buildLedger({ charges, balanceTxns, sales, transfers: [], now: NOW });
     const row = (id) => l.rows.find((r) => r.chargeId === id);
-    assert.deepEqual([row("ch_sale").sellerShare, row("ch_sale").rexbidShare, row("ch_sale").toSend], [570, 56, 56]); // 636 − 10 fee − 570
+    assert.equal(row("ch_sale").connectFee, 4.34); // (570 × 0.25% + €0.10 + €2) + 23% VAT
+    assert.deepEqual([row("ch_sale").sellerShare, row("ch_sale").rexbidShare, row("ch_sale").toSend], [570, 51.66, 51.66]); // 636 − 10 − 570 − 4.34
     assert.deepEqual([row("ch_feat").kind, row("ch_feat").rexbidShare, row("ch_feat").cleared], ["fee", 29.3, false]);
     assert.deepEqual([row("ch_odd").kind, row("ch_odd").rexbidShare, row("ch_odd").toSend], ["check", null, 0]);
     assert.equal(row("ch_ref").toSend, 0); // refunded, failed sale: nothing to send
     assert.equal(row("ch_gbp").sellerShare, 94.4); // £80 at the rate Stripe used (1.18)
-    assert.equal(row("ch_gbp").rexbidShare, 21.6); // 118 − 2 − 94.4
-    assert.equal(l.readyNow, 77.6); // cleared: 56 + 21.6
-    assert.deepEqual(l.days.map((d) => [d.date, d.toSend]), [["2026-11-18", 77.6], ["2026-11-23", 29.3]]);
+    assert.equal(row("ch_gbp").rexbidShare, 18.73); // 118 − 2 − 94.4 − 2.87 Connect fees
+    assert.equal(l.readyNow, 70.39); // cleared: 51.66 + 18.73
+    assert.deepEqual(l.days.map((d) => [d.date, d.toSend]), [["2026-11-18", 70.39], ["2026-11-23", 29.3]]);
     assert.equal(l.toCheck, 1);
 });
 
 test("what's been sent is taken off, and marked payments are set aside", () => {
     const transfers = [
         { kind: "payout", items: [{ chargeId: "ch_sale", amount: 20 }] },
-        { kind: "marked", items: [{ chargeId: "ch_gbp", amount: 21.6 }, { chargeId: "ch_odd", amount: 0 }] },
+        { kind: "marked", items: [{ chargeId: "ch_gbp", amount: 18.73 }, { chargeId: "ch_odd", amount: 0 }] },
     ];
     const l = buildLedger({ charges, balanceTxns, sales, transfers, now: NOW });
     const row = (id) => l.rows.find((r) => r.chargeId === id);
-    assert.equal(row("ch_sale").toSend, 36);
+    assert.equal(row("ch_sale").toSend, 31.66);
     assert.equal(row("ch_gbp").toSend, 0);
     assert.equal(row("ch_gbp").settled, true);
     assert.equal(l.toCheck, 0);
-    assert.equal(l.readyNow, 36);
+    assert.equal(l.readyNow, 31.66);
+});
+
+test("over €15,000: no Connect fees, and the seller's share goes to BOI too (they're paid from BOI)", () => {
+    const big = [ch("ch_big", 1600000, "tb", { payment_intent: "pi_big" })];
+    const bts = [bt("tb", 1600000, 2000, CLEARED)];
+    const s = [{ _id: "SB", reference: "BIG-1", title: "Tractor", status: "paid", currency: "EUR", itemPrice: 15500, vat: { amount: 0 }, sellerFee: 300, total: 16000, payment: { transactionId: "pi_big" } }];
+    const l = buildLedger({ charges: big, balanceTxns: bts, sales: s, transfers: [], now: NOW });
+    const r = l.rows[0];
+    assert.deepEqual([r.sellerViaBank, r.connectFee, r.sellerShare, r.rexbidShare, r.sellerToBank, r.toSend], [true, 0, 15200, 780, 15200, 15980]);
+    assert.equal(l.readyForSellersViaBank, 15200);
+    // Already paid through Stripe Connect: fees apply, seller's share stays in Stripe.
+    const viaConnect = buildLedger({ charges: big, balanceTxns: bts, sales: [{ ...s[0], payout: { method: "stripe_connect" } }], transfers: [], now: NOW }).rows[0];
+    assert.equal(viaConnect.sellerViaBank, false);
+    assert.equal(viaConnect.toSend, viaConnect.rexbidShare);
 });
