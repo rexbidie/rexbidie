@@ -5,6 +5,7 @@ import {
     createOnboardingLink,
     createDashboardLink,
     payoutState,
+    readPayoutSetupToken,
 } from "../services/connectService.js";
 
 // Mounted at /api/v1/stripe-connect (sellers and companies, signed in)
@@ -51,6 +52,25 @@ connectRouter.post("/dashboard-link", auth, async (req, res) => {
         const { default: User } = await import("../models/user.model.js");
         const user = await User.findById(req.user._id);
         res.json({ success: true, data: { url: await createDashboardLink(user) } });
+    } catch (err) {
+        fail(res, err);
+    }
+});
+
+// Public: the emailed payout setup link (no sign-in). Returns a fresh Stripe link.
+connectRouter.get("/setup/:token", async (req, res) => {
+    try {
+        const uid = readPayoutSetupToken(req.params.token);
+        if (!uid) return res.status(410).json({ success: false, message: "This link has expired. Please ask RexBid for a new one." });
+        const { default: User } = await import("../models/user.model.js");
+        const user = await User.findById(uid);
+        if (!user || user.deletedAt) return res.status(404).json({ success: false, message: "This link is no longer valid." });
+        const site = process.env.FRONTEND_URL || "https://rexbid.ie";
+        const url = await createOnboardingLink(user, {
+            refreshUrl: `${site}/payout-setup/${req.params.token}`,
+            returnUrl: `${site}/payout-setup/done`,
+        });
+        res.json({ success: true, data: { url } });
     } catch (err) {
         fail(res, err);
     }

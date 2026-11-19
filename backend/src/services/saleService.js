@@ -809,6 +809,57 @@ export const matchOutsideStripePayments = async ({ limit = 30 } = {}) => {
  * request goes out.
  */
 /**
+ * Changes who the seller is on a sale (and, by default, on its listing), e.g.
+ * a lot RexBid listed on someone's behalf. Uses their RexBid account if the
+ * email has one; otherwise creates a seller account for them in the
+ * background (they never need to sign in: payouts are set up through the
+ * emailed Stripe link). Not for sales already paid out.
+ */
+export const changeSaleSeller = async (saleId, input = {}, admin = null) => {
+    const sale = await Sale.findById(saleId);
+    if (!sale) throw Object.assign(new Error("Sale not found"), { status: 404 });
+    if (sale.status === "paid_out") throw Object.assign(new Error("This sale has already been paid out"), { status: 400 });
+    const email = String(input.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error("Enter the seller's email address"), { status: 400 });
+
+    let user = await User.findOne({ email }).select(USER_FIELDS + " deletedAt userType");
+    let created = false;
+    if (user?.deletedAt) throw Object.assign(new Error("That account has been deleted"), { status: 400 });
+    if (!user) {
+        const name = String(input.name || "").trim().replace(/\s+/g, " ");
+        if (!name) throw Object.assign(new Error("Enter the seller's name"), { status: 400 });
+        const [firstName, ...rest] = name.split(" ");
+        const { default: crypto } = await import("crypto");
+        user = await User.create({
+            firstName,
+            lastName: rest.join(" ") || "-",
+            email,
+            phone: String(input.phone || "").trim() || undefined,
+            companyName: String(input.companyName || "").trim() || undefined,
+            userType: "seller",
+            // Never told to anyone: they can use "Forgot password" if they want to sign in.
+            password: crypto.randomBytes(24).toString("base64url"),
+            isVerified: true,
+            emailVerificationRequired: false,
+            countryName: "Ireland",
+            currency: sale.currency === "GBP" ? "GBP" : "EUR",
+        });
+        created = true;
+    }
+    if (String(sale.seller?.user) === String(user._id)) return { sale, user, created, changed: false };
+
+    const before = sale.seller?.companyName || sale.seller?.name || "previous seller";
+    sale.seller = partyFromUser(user);
+    sale.notes.push({
+        text: `Seller changed from ${before} to ${sale.seller.companyName || sale.seller.name}${created ? " (seller account created for them)" : ""}`,
+        by: admin?._id,
+    });
+    await sale.save();
+    if (input.updateListing !== false) await Auction.updateOne({ _id: sale.auction }, { $set: { seller: user._id } });
+    return { sale, user, created, changed: true };
+};
+
+/**
  * Changes the buyer's details on one sale (who the documents are made out
  * to and where emails go), e.g. a buyer invoicing through their company.
  * The buyer's own account is not changed. Documents already sent keep the

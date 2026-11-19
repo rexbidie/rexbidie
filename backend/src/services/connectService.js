@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 import { regionForUser } from "../utils/region.js";
 
@@ -22,6 +23,23 @@ const EXPRESS_CONTROLLER = {
 export const dashboardFor = (user) => (user?.userType === "company" ? "company" : "seller");
 
 export const payoutSetupUrl = (user) => `${FRONTEND_URL}/${dashboardFor(user)}/payout-methods?stripe=setup`;
+
+// Payout setup without signing in: a link that goes straight to Stripe's
+// onboarding for this seller. Stripe's own links expire within minutes, so we
+// send ours (valid 30 days) and make a fresh Stripe link each time it's opened.
+const LINK_SECRET = () => process.env.PAYOUT_LINK_SECRET || process.env.REFRESH_TOKEN_SECRET;
+export const PAYOUT_LINK_DAYS = 30;
+export const payoutSetupToken = (user) =>
+    jwt.sign({ uid: String(user._id), p: "payout_setup" }, LINK_SECRET(), { expiresIn: `${PAYOUT_LINK_DAYS}d` });
+export const readPayoutSetupToken = (token) => {
+    try {
+        const data = jwt.verify(String(token || ""), LINK_SECRET());
+        return data?.p === "payout_setup" ? data.uid : null;
+    } catch {
+        return null;
+    }
+};
+export const directPayoutSetupUrl = (user) => `${FRONTEND_URL}/payout-setup/${payoutSetupToken(user)}`;
 
 export const statusFromAccount = (acct) => {
     const bank = acct?.external_accounts?.data?.find((b) => b.default_for_currency) || acct?.external_accounts?.data?.[0];
@@ -171,7 +189,7 @@ export const ensureIndividualAccount = async (user) => {
 };
 
 /** One-time Stripe link where the seller enters their details and bank account. */
-export const createOnboardingLink = async (user) => {
+export const createOnboardingLink = async (user, { refreshUrl, returnUrl } = {}) => {
     await refreshSellerConnect(user);
     await ensureIndividualAccount(user);
     const accountId = await ensureConnectAccount(user);
@@ -179,8 +197,8 @@ export const createOnboardingLink = async (user) => {
     const link = await stripe.accountLinks.create({
         account: accountId,
         type: "account_onboarding",
-        refresh_url: `${base}?stripe=setup`,
-        return_url: `${base}?stripe=return`,
+        refresh_url: refreshUrl || `${base}?stripe=setup`,
+        return_url: returnUrl || `${base}?stripe=return`,
     });
     return link.url;
 };

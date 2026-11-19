@@ -34,6 +34,8 @@ import {
     commissionPayments,
     markCommissionSent,
     updateBuyerDetails,
+    changeSeller,
+    payoutSetupLink,
     importFees,
 } from "../controllers/sale.controller.js";
 
@@ -67,6 +69,8 @@ adminSaleRouter.post("/:saleId/record-payment", authAdmin, recordPaymentManually
 adminSaleRouter.post("/:saleId/link-payout-account", authAdmin, linkSellerStripeAccount);
 adminSaleRouter.patch("/:saleId/buyer-fee", authAdmin, updateBuyerFee);
 adminSaleRouter.patch("/:saleId/buyer", authAdmin, updateBuyerDetails);
+adminSaleRouter.post("/:saleId/seller", authAdmin, changeSeller);
+adminSaleRouter.get("/:saleId/payout-setup-link", authAdmin, payoutSetupLink);
 adminSaleRouter.get("/:saleId/refund", authAdmin, refundInfo);
 adminSaleRouter.post("/:saleId/refund", authAdmin, refundBuyer);
 adminSaleRouter.get("/:saleId/documents/:documentId", authAdmin, downloadDocument);

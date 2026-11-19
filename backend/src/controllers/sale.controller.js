@@ -321,7 +321,9 @@ export const sendPayoutSetupEmail = async (req, res) => {
             sale.notes.push({ text: `Stripe payout account ${seller.stripeConnect?.accountId} created for the seller`, by: req.user._id });
         }
         const { sellerPayoutSetupEmail } = await import("../utils/nodemailer.js");
-        const ok = await sellerPayoutSetupEmail(seller, { state, url: payoutSetupUrl(seller), saleTitle: sale.title });
+        // Goes straight to Stripe: no RexBid sign-in needed.
+        const { directPayoutSetupUrl } = await import("../services/connectService.js");
+        const ok = await sellerPayoutSetupEmail(seller, { state, url: directPayoutSetupUrl(seller), saleTitle: sale.title });
         if (!ok) return res.status(502).json({ success: false, message: "Email failed to send" });
         sale.notes.push({ text: `Payout setup link emailed to ${seller.email}`, by: req.user._id });
         await sale.save();
@@ -521,6 +523,31 @@ export const markCommissionSent = async (req, res) => {
     try {
         const { markCommissionSent: mark } = await import("../services/commissionLedgerService.js");
         res.json({ success: true, data: await mark(req.body?.chargeIds, req.body?.note, req.user) });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+export const changeSeller = async (req, res) => {
+    try {
+        const { changeSaleSeller } = await import("../services/saleService.js");
+        const { directPayoutSetupUrl, PAYOUT_LINK_DAYS } = await import("../services/connectService.js");
+        const { sale, user, created, changed } = await changeSaleSeller(req.params.saleId, req.body || {}, req.user);
+        res.json({ success: true, data: { seller: sale.seller, created, changed, payoutSetupLink: directPayoutSetupUrl(user), linkDays: PAYOUT_LINK_DAYS } });
+    } catch (err) {
+        fail(res, err);
+    }
+};
+
+/** A payout setup link for the sale's seller (straight to Stripe, no sign-in), to paste into an email. */
+export const payoutSetupLink = async (req, res) => {
+    try {
+        const sale = await Sale.findById(req.params.saleId, "seller");
+        if (!sale) return res.status(404).json({ success: false, message: "Sale not found" });
+        const seller = await User.findById(sale.seller?.user);
+        if (!seller) return res.status(404).json({ success: false, message: "Seller account not found" });
+        const { directPayoutSetupUrl, PAYOUT_LINK_DAYS } = await import("../services/connectService.js");
+        res.json({ success: true, data: { url: directPayoutSetupUrl(seller), days: PAYOUT_LINK_DAYS } });
     } catch (err) {
         fail(res, err);
     }
