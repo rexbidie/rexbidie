@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Mail, Lock, Eye, EyeOff, User, ChevronDown, X } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, X } from 'lucide-react';
 import { darkLogo } from '../assets';
 import { toast } from 'react-hot-toast';
 import axiosInstance from '../utils/axiosInstance';
@@ -11,12 +11,14 @@ import { isNativeApp } from '../native/platform';
 import EmailCodeForm from './auth/EmailCodeForm';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import { hasAccountOnDevice } from '../utils/accountHint.js';
+import { normalisePhone, normalisePostcode, regionFromPostcode } from '../utils/contactValidation.js';
 
-// "Where are you based?" → what the server needs for VAT region and currency.
+// The post code tells us where they're based → what the server needs for the VAT
+// region (utils/region.js) and the currency. No separate country/county questions.
 const BASED_IN = {
-    ROI: { label: 'Republic of Ireland', countryCode: 'IE', countryName: 'Ireland', currency: 'EUR' },
-    NI: { label: 'Northern Ireland', countryCode: 'GB', countryName: 'Northern Ireland', currency: 'GBP' },
-    GB: { label: 'England, Scotland or Wales', countryCode: 'GB', countryName: 'United Kingdom', currency: 'GBP' },
+    ROI: { countryCode: 'IE', countryName: 'Ireland', currency: 'EUR' },
+    NI: { countryCode: 'GB', countryName: 'Northern Ireland', currency: 'GBP' },
+    GB: { countryCode: 'GB', countryName: 'United Kingdom', currency: 'GBP' },
 };
 
 const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
@@ -30,6 +32,23 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
     const { setUser } = useAuth();
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    // Live email check (POST /users/check-email): { email, ok, problem, suggestion, dismissed }
+    const [emailCheck, setEmailCheck] = useState(null);
+
+    const runEmailCheck = async (raw) => {
+        const email = String(raw || '').toLowerCase().trim();
+        if (!email.includes('@')) { setEmailCheck(null); return null; }
+        try {
+            const { data } = await axiosInstance.post('/api/v1/users/check-email', { email });
+            const result = { email, ok: data.ok, problem: data.problem, suggestion: data.suggestion, dismissed: false };
+            setEmailCheck(result);
+            if (data.problem) trackEvent('signup_email_warning', { problem: data.problem, context: 'bid_popup' });
+            return result;
+        } catch {
+            setEmailCheck(null); // check unavailable: the server still checks on sign-up
+            return null;
+        }
+    };
 
     // Funnel tracking: the login/register wall shown when a guest tries to bid/offer
     const gateAction = pendingAction?.type || 'bid';
@@ -125,13 +144,20 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             email: '', phone: '', password: '', confirmPassword: '',
             username: '', firstName: '', lastName: '',
             line1: '', line2: '', county: '', postCode: '',
-            country: 'ROI', currency: 'EUR', userType: 'bidder',
+            country: '', currency: 'EUR', userType: 'bidder',
             companyName: '', companyVATNumber: '', termsConditions: false,
         },
     });
 
 
     const onRegister = async (data) => {
+        // Bad or mistyped email: stop here and show the hint under the field.
+        const email = data.email.toLowerCase().trim();
+        const check = emailCheck?.email === email ? emailCheck : await runEmailCheck(email);
+        if (check && (!check.ok || (check.suggestion && !check.dismissed))) {
+            toast.error(check.suggestion ? `Did you mean ${check.suggestion}?` : "That email address can't receive email.");
+            return;
+        }
         try {
             setIsLoading(true);
 
@@ -139,11 +165,11 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             formData.append('firstName', data.firstName);
             formData.append('lastName', data.lastName);
             formData.append('email', data.email.toLowerCase().trim());
-            formData.append('phone', data.phone || '');
+            formData.append('phone', normalisePhone(data.phone) || data.phone || '');
             formData.append('password', data.password);
             formData.append('username', data.username);
             formData.append('userType', data.userType);
-            const based = BASED_IN[data.country] || BASED_IN.ROI;
+            const based = BASED_IN[regionFromPostcode(data.postCode)] || BASED_IN.ROI;
             formData.append('countryCode', based.countryCode);
             formData.append('countryName', based.countryName);
             // Currency follows where they're based; it can be changed later in the profile.
@@ -152,7 +178,7 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
             formData.append('line2', data.line2 || '');
             formData.append('county', data.county || '');
             formData.append('state', data.state || '');
-            formData.append('postCode', data.postCode || '');
+            formData.append('postCode', normalisePostcode(data.postCode) || data.postCode || '');
             formData.append('gaClientId', getGaClientId() || '');
 
             if (data.userType === 'company') {
@@ -343,7 +369,42 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                             </div>
 
                             <Input label="Email *" type="email" placeholder="you@example.com" autoComplete="email" icon={<Mail size={18} />} error={regErrors.email?.message}
-                                {...regRegister('email', { required: 'Email required' })} />
+                                {...regRegister('email', {
+                                    required: 'Email required',
+                                    onBlur: (e) => runEmailCheck(e.target.value),
+                                    onChange: () => setEmailCheck(null),
+                                })} />
+                            {emailCheck && !emailCheck.ok && !emailCheck.suggestion && (
+                                <p className="text-red-500 text-xs -mt-2">That email address can't receive email. Please check it.</p>
+                            )}
+                            {emailCheck?.suggestion && !emailCheck.dismissed && (
+                                <div className="-mt-2 text-xs bg-amber-50 border border-amber-200 rounded-lg p-2 flex flex-wrap items-center gap-2">
+                                    <span>Did you mean <strong>{emailCheck.suggestion}</strong>?</span>
+                                    <button type="button" className="underline font-semibold text-[#A17B35]"
+                                        onClick={() => { regSetValue('email', emailCheck.suggestion); runEmailCheck(emailCheck.suggestion); }}>
+                                        Yes, use it
+                                    </button>
+                                    {emailCheck.ok && (
+                                        <button type="button" className="underline text-gray-600"
+                                            onClick={() => setEmailCheck({ ...emailCheck, dismissed: true })}>
+                                            No, mine is correct
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input label="Mobile number *" type="tel" inputMode="tel" placeholder="087 123 4567" autoComplete="tel" error={regErrors.phone?.message}
+                                    {...regRegister('phone', {
+                                        required: 'Required',
+                                        validate: (v) => !!normalisePhone(v) || 'Enter a valid phone number',
+                                    })} />
+                                <Input label="Eircode / postcode *" placeholder="D02 X285" autoComplete="postal-code" error={regErrors.postCode?.message}
+                                    {...regRegister('postCode', {
+                                        required: 'Required',
+                                        validate: (v) => !!normalisePostcode(v) || 'Enter a valid Eircode or UK postcode',
+                                    })} />
+                            </div>
 
                             <div>
                                 <label className="text-xs font-medium">Password *</label>
@@ -360,23 +421,6 @@ const AuthBidModal = ({ isOpen, onClose, onAuthSuccess, pendingAction }) => {
                                     </button>
                                 </div>
                                 {regErrors.password && <p className="text-red-500 text-xs mt-1">{regErrors.password.message}</p>}
-                            </div>
-
-                            <div>
-                                {/* One question instead of country + county + post code: it sets the
-                                    VAT region (utils/region.js on the server) and the currency. */}
-                                <label className="text-xs font-medium">Where are you based? *</label>
-                                <div className="relative">
-                                    <select
-                                        {...regRegister('country', { required: 'Required' })}
-                                        className="w-full p-3 border rounded-lg text-sm appearance-none"
-                                    >
-                                        {Object.entries(BASED_IN).map(([key, b]) => (
-                                            <option key={key} value={key}>{b.label}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown size={16} className="absolute right-3 top-4 text-gray-400 pointer-events-none" />
-                                </div>
                             </div>
 
                             <label className="flex items-start gap-2 text-xs text-gray-600">

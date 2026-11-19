@@ -1,4 +1,5 @@
 import { checkEmail } from "../utils/emailCheck.js";
+import { normalisePhone, normalisePostcode } from "../utils/contactValidation.js";
 import { confirmVerificationCode, emailVerificationEnabled, needsEmailVerification, resendWaitSeconds, sendVerificationCode } from "../services/emailVerificationService.js";
 import User from "../models/user.model.js";
 import { StripeService } from "../services/stripeService.js";
@@ -104,6 +105,19 @@ const generateUsername = async (firstName) => {
   return `${base}${Date.now().toString(36)}`;
 };
 
+/**
+ * @desc    Check an email address while someone is typing it: format, whether the
+ *          domain can receive email, and likely typos ("gmial.com"). Never says
+ *          whether an account exists.
+ * @route   POST /api/v1/users/check-email  { email }
+ * @access  Public
+ */
+export const checkEmailAddress = async (req, res) => {
+  const email = String(req.body?.email || "").toLowerCase().trim().slice(0, 254);
+  const result = await checkEmail(email);
+  res.json({ success: true, ...result });
+};
+
 export const registerUser = async (req, res) => {
   try {
     // ========== STEP 1: Initiate registration ==========
@@ -130,6 +144,26 @@ export const registerUser = async (req, res) => {
     } = req.body;
 
     const normalizedEmail = email?.toLowerCase().trim();
+
+    // Every account needs a real-looking phone number and an Eircode / UK postcode
+    // (fewer throwaway bidder accounts; sellers need a way to reach the buyer).
+    const cleanPhone = normalisePhone(phone);
+    if (!cleanPhone) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_PHONE',
+        message: 'Please enter a valid phone number, e.g. 087 123 4567 or +44 7700 900123.',
+      });
+    }
+    const cleanPostCode = normalisePostcode(postCode);
+    if (!cleanPostCode) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_POSTCODE',
+        message: 'Please enter a valid Eircode (e.g. D02 X285) or UK postcode (e.g. BT1 5GS).',
+      });
+    }
+
     // The short sign-up (bid popup) doesn't ask for a username: make one from the
     // first name. Bids and proxy bids store a username, so every account needs one.
     const normalizedUsername = username?.trim()
@@ -206,7 +240,7 @@ export const registerUser = async (req, res) => {
       countryCode,
       countryName,
       currency: currency || 'EUR',
-      phone,
+      phone: cleanPhone,
       image,
       isVerified: true, //changed
       // Must confirm the email address with a code before using the account
@@ -220,7 +254,7 @@ export const registerUser = async (req, res) => {
         line2,
         county,
         state,
-        postCode,
+        postCode: cleanPostCode,
         country: countryName,
       },
     };

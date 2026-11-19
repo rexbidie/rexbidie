@@ -13,6 +13,7 @@ import {
     logoutUser,
     refreshAccessToken,
     registerUser,
+    checkEmailAddress,
     resetPassword,
     unsubscribeUser,
     updateCurrency,
@@ -38,6 +39,8 @@ const userRouter = Router();
 
 // Public routes
 userRouter.post('/register', upload.single('identificationDocument'), registerUser);
+// Live email check on the sign-up forms (format, mail server, typo suggestion)
+userRouter.post('/check-email', checkEmailAddress);
 userRouter.post('/login', loginUser);
 // Confirm the email address with the 6-digit code from sign-up
 userRouter.post('/verify-email', verifyEmail);
