@@ -115,6 +115,27 @@ function AllUsers() {
         }
     };
 
+    // Sign-up code help: email a new code, or confirm the address by hand.
+    const emailVerificationAction = async (user, action) => {
+        const question = action === 'resend-verification'
+            ? `Email a new 6-digit code to ${user.email}?`
+            : `Mark ${user.email} as confirmed? They'll be able to log in without a code.`;
+        if (!window.confirm(question)) return;
+        try {
+            const { data } = await axiosInstance.post(`/api/v1/admin/users/${user._id}/${action}`);
+            toast.success(data.message);
+            setSelectedUser((prev) => prev && ({
+                ...prev,
+                ...(action === 'confirm-email'
+                    ? { emailVerifiedAt: data.data?.emailVerifiedAt || new Date().toISOString() }
+                    : { emailVerificationSentAt: new Date().toISOString() }),
+            }));
+            fetchUsers();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Something went wrong');
+        }
+    };
+
     const handleActivateUser = async (userId, userName, currentStatus) => {
         const newStatus = true;
         try {
@@ -933,6 +954,34 @@ function AllUsers() {
                                                     <div>
                                                         <div className="text-sm text-gray-500">Email</div>
                                                         <div className="font-medium">{selectedUser.email}</div>
+                                                        {/* Sign-up code (only accounts created since email confirmation started) */}
+                                                        {selectedUser.emailVerificationRequired && (
+                                                            selectedUser.emailVerifiedAt ? (
+                                                                <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">Email confirmed</span>
+                                                            ) : (
+                                                                <div className="mt-2 flex flex-col gap-2">
+                                                                    <span className="inline-block w-fit rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                                                        Email not confirmed{selectedUser.emailVerificationSentAt ? ` · last code sent ${new Date(selectedUser.emailVerificationSentAt).toLocaleString('en-IE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ' · no code sent'}
+                                                                    </span>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => emailVerificationAction(selectedUser, 'resend-verification')}
+                                                                            className="min-h-[36px] rounded-lg border border-gray-300 px-3 text-sm font-semibold text-[#072342] hover:bg-gray-50"
+                                                                        >
+                                                                            Resend code
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => emailVerificationAction(selectedUser, 'confirm-email')}
+                                                                            className="min-h-[36px] rounded-lg bg-[#072342] px-3 text-sm font-semibold text-white hover:bg-[#0b3360]"
+                                                                        >
+                                                                            Mark email as confirmed
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">

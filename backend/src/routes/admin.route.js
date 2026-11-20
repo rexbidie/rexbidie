@@ -28,6 +28,7 @@ import {
     manualSellAuction
 } from '../controllers/admin.controller.js';
 import { authAdmin } from '../middlewares/auth.middleware.js';
+import { adminConfirmEmail, adminResendVerification } from '../controllers/adminEmailVerification.controller.js';
 import { pendingEdits, approve as approveListingEdit, reject as rejectListingEdit } from '../controllers/listingEdit.controller.js';
 import upload from '../middlewares/multer.middleware.js';
 import { getAdminTransactions, getTransactionStats } from '../controllers/transaction.controller.js';
@@ -43,6 +44,9 @@ AdminRouter.post('/listing-edits/:id/reject', authAdmin, rejectListingEdit);
 AdminRouter.get('/users', authAdmin, getAllUsers);
 AdminRouter.get('/users/:userId', authAdmin, getUserDetails);
 AdminRouter.patch('/users/:userId/status', authAdmin, updateUserStatus);
+// Sign-up code help: resend it, or confirm the email by hand
+AdminRouter.post('/users/:userId/resend-verification', authAdmin, adminResendVerification);
+AdminRouter.post('/users/:userId/confirm-email', authAdmin, adminConfirmEmail);
 AdminRouter.patch('/users/:userId/type', authAdmin, updateUserType);
 AdminRouter.delete('/users/:userId', authAdmin, deleteUser);
 AdminRouter.patch('/users/:userId/identificationDocument/verify', authAdmin, verifyUserIdentity);
