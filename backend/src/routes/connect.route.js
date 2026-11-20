@@ -25,8 +25,14 @@ const send = (res, sc) =>
     });
 
 const fail = (res, err) => {
-    if (!err.status) console.error("Stripe Connect error:", err);
-    res.status(err.status || 500).json({ success: false, message: err.status ? err.message : "Stripe could not be reached. Please try again." });
+    if (!err.status) console.error("Stripe Connect error:", err?.type, err?.code, err?.message);
+    // Stripe's own reason (e.g. a detail it won't accept) helps the seller and us;
+    // only a real connection problem gets the generic message.
+    const stripeSaid = err?.type && err.type !== "StripeConnectionError" && err.type !== "StripeAPIError" ? err.message : null;
+    res.status(err.status || (stripeSaid ? 400 : 500)).json({
+        success: false,
+        message: err.status ? err.message : stripeSaid ? `Stripe says: ${stripeSaid}` : "Stripe could not be reached. Please try again.",
+    });
 };
 
 connectRouter.get("/status", auth, async (req, res) => {
