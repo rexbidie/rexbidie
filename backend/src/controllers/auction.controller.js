@@ -4864,7 +4864,7 @@ export const setLiveBuyNowPrice = async (req, res) => {
             success: false,
             message: state.reason === "closing_soon"
               ? "Buy It Now can't be set in the last 12 hours of the auction."
-              : "Bidding has reached 90% of your reserve, so Buy It Now can't be set on this lot.",
+              : "Bidding is already close to your reserve, so Buy It Now can't be set on this lot.",
           });
         }
       }
